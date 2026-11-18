@@ -245,7 +245,7 @@ const app = createApp({
       }
 
       if (!currentUser.value || currentUser.value.role === "visiteur") {
-        ouvrirAuth("login", `Pour démarrer l'entraînement de ${exo.nom} avec le suivi IA en temps réel, veuillez vous connecter ou créer votre compte.`);
+        ouvrirAuth("login", `Connectez-vous ou créez un compte pour démarrer « ${exo.nom} » avec le suivi IA en temps réel.`);
       } else {
         activeView.value = "workout";
       }
@@ -494,7 +494,7 @@ const app = createApp({
     // --- CYCLE DE VIE DE LA SÉANCE (Figures 4, 6 & 7) ---
     const lancerSeance = async () => {
       if (!currentUser.value || currentUser.value.role === "visiteur") {
-        ouvrirAuth("login", "Conformément au diagramme de cas d'utilisation, le sportif doit être authentifié pour lancer une séance de décompte et enregistrer son historique.");
+        ouvrirAuth("login", "Connectez-vous pour lancer une séance et enregistrer votre historique.");
         return;
       }
       if (!selectedExercice.value) return;
@@ -687,7 +687,31 @@ const app = createApp({
       if (role === "administrateur") loadAdminData();
     };
 
+    const ouvrirAuth = (mode = "login", reason = "") => {
+      authForm.mode = mode;
+      authPromptReason.value = reason;
+      authMessage.value = "";
+      showPassword.value = false;
+      isAuthModalOpen.value = true;
+    };
+
+    const fermerAuth = () => {
+      isAuthModalOpen.value = false;
+      authMessage.value = "";
+    };
+
     const handleAuth = async () => {
+      authMessage.value = "";
+      authMessageType.value = "error";
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authForm.email);
+      if (!emailOk) { authMessage.value = "Veuillez saisir une adresse e-mail valide."; return; }
+      if (!authForm.mot_de_passe || authForm.mot_de_passe.length < 6) {
+        authMessage.value = "Le mot de passe doit contenir au moins 6 caractères."; return;
+      }
+      if (authForm.mode === "register" && (!authForm.nom || !authForm.prenom)) {
+        authMessage.value = "Veuillez renseigner votre nom et votre prénom."; return;
+      }
+
       const endpoint = authForm.mode === "login" ? "/auth/login" : "/auth/register";
       try {
         const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -697,16 +721,20 @@ const app = createApp({
         });
         const data = await res.json();
         if (!res.ok) {
-          alert(data.detail || "Erreur d'authentification");
+          authMessage.value = data.detail || "Erreur d'authentification.";
           return;
         }
         currentUser.value = data.user;
-        isAuthModalOpen.value = false;
+        const veutSEntrainer = !!authPromptReason.value;
+        fermerAuth();
+        authForm.mot_de_passe = "";
+        if (veutSEntrainer && selectedExercice.value) activeView.value = "workout";
         loadObjectifs();
         loadHistorique();
         loadNotifications();
+        if (data.user.role === "administrateur") loadAdminData();
       } catch (e) {
-        alert("Erreur réseau");
+        authMessage.value = "Impossible de joindre le serveur. Vérifiez qu'il est bien lancé.";
       }
     };
 
@@ -857,6 +885,12 @@ const app = createApp({
       isNewExoModalOpen,
       isNewObjModalOpen,
       authForm,
+      authPromptReason,
+      showPassword,
+      authMessage,
+      authMessageType,
+      ouvrirAuth,
+      fermerAuth,
       nouvelObjectif,
       nouvelExercice,
       videoElement,

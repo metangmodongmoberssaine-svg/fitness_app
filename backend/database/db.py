@@ -151,6 +151,7 @@ def init_db():
 
     db = get_connection()
     cur = db.cursor()
+    print(f"[Base de données] Moteur utilisé : {'MySQL ' + DB_NAME if db.is_mysql else 'SQLite (fichier local)'}")
 
     # DDL compatible MySQL & SQLite
     if db.is_mysql:

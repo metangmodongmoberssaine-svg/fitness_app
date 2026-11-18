@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Fitness Counter - Décompte d'exercices par Vision par Ordinateur</title>
+  <title>AI Fitness Counter - Décompte d'exercices par vision par ordinateur</title>
   <link rel="stylesheet" href="/style.css">
   <!-- Polices Google Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <!-- Vue 3 -->
@@ -66,17 +66,19 @@
           </div>
         </div>
 
-        <!-- Changement Rapide de Rôle pour Démo / Soutenance -->
-        <div style="display: flex; gap: 0.3rem;">
-          <button class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;" @click="switchUserFast('sportif', 2, 'Dupont', 'Jean', 'jean@fitness.ai')" title="Tester en tant que Sportif">
-            Sportif
-          </button>
-          <button class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;" @click="switchUserFast('administrateur', 1, 'Admin', 'Super', 'admin@fitness.ai')" title="Tester en tant qu'Administrateur">
-            Admin
-          </button>
-          <button class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;" @click="seDeconnecter" title="Tester en tant que Visiteur">
-            Visiteur
-          </button>
+        <!-- Visiteur : boutons Connexion / Inscription -->
+        <div class="nav-auth" v-if="currentUser.role === 'visiteur'">
+          <button class="btn btn-secondary btn-pill" @click="ouvrirAuth('login')">Connexion</button>
+          <button class="btn btn-primary btn-pill" @click="ouvrirAuth('register')">S'inscrire</button>
+        </div>
+        <button class="icon-btn" v-else @click="seDeconnecter" title="Se déconnecter">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+
+        <!-- Changement rapide de rôle (démo / soutenance) -->
+        <div class="demo-switch" title="Mode démo">
+          <button @click="switchUserFast('sportif', 2, 'Dupont', 'Jean', 'jean@fitness.ai')">Sportif</button>
+          <button @click="switchUserFast('administrateur', 1, 'Admin', 'Super', 'admin@fitness.ai')">Admin</button>
         </div>
       </div>
     </header>
@@ -166,7 +168,7 @@
               <!-- Message d'Aide : Personne non détectée (Figure 5, messages 9-10) -->
               <div class="center-alert" v-if="sessionState.statut === 'en_cours' && !sessionState.personneDetectee">
                 <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; color: var(--accent-amber); margin-bottom: 0.5rem;"></i>
-                <div style="font-size: 1.15rem; font-weight: 800;">Placez-vous dans le cadre</div>
+                <div style="font-size: 1.15rem; font-weight: 700;">Placez-vous dans le cadre</div>
                 <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
                   Reculez afin que vos articulations soient visibles par la caméra.
                 </p>
@@ -181,7 +183,7 @@
               <!-- Écran de Pause (Figure 6 - opt [pause]) -->
               <div class="pause-overlay" v-if="sessionState.statut === 'en_pause'">
                 <i class="fa-solid fa-circle-pause" style="font-size: 3.5rem; color: var(--accent-cyan);"></i>
-                <div style="font-size: 1.5rem; font-weight: 800;">Séance en Pause</div>
+                <div style="font-size: 1.5rem; font-weight: 700;">Séance en Pause</div>
                 <p style="color: var(--text-secondary); font-size: 0.9rem;">L'analyse de vision par ordinateur est suspendue.</p>
                 <button class="btn btn-primary" @click="reprendre" style="margin-top: 0.5rem;">
                   <i class="fa-solid fa-play"></i> Reprendre la séance
@@ -191,7 +193,7 @@
               <!-- Écran de Bienvenue / Pré-démarrage -->
               <div class="pause-overlay" v-if="sessionState.statut === 'non_demarre'">
                 <i class="fa-solid fa-camera-rotate" style="font-size: 3rem; color: var(--accent-teal); margin-bottom: 0.5rem;"></i>
-                <div style="font-size: 1.3rem; font-weight: 800;">Prêt pour votre entraînement ?</div>
+                <div style="font-size: 1.3rem; font-weight: 700;">Prêt pour votre entraînement ?</div>
                 <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 450px; text-align: center;">
                   Choisissez un exercice, placez-vous face à la caméra et cliquez sur <b>Démarrer la séance</b>.
                 </p>
@@ -207,7 +209,7 @@
             <div style="margin-top: 1rem; background: var(--bg-secondary); padding: 1rem 1.2rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem;">
               <div>
                 <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Exercice sélectionné</span>
-                <div style="font-size: 1.1rem; font-weight: 800; color: var(--accent-cyan);">
+                <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">
                   {{ selectedExercice?.nom }}
                 </div>
                 <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
@@ -251,7 +253,7 @@
                 <span style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary);">
                   Angle Articulaire Mesuré (θ)
                 </span>
-                <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-cyan);">
+                <span style="font-size: 1.4rem; font-weight: 700; color: var(--accent-cyan);">
                   {{ sessionState.angleCourant }}°
                 </span>
               </div>
@@ -320,7 +322,7 @@
         <div class="modal-backdrop" v-if="recapitulatifSeance">
           <div class="modal-dialog">
             <div class="modal-header">
-              <h3 style="font-size: 1.3rem; font-weight: 800; display: flex; align-items: center; gap: 0.6rem;">
+              <h3 style="font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 0.6rem;">
                 <i class="fa-solid fa-trophy" style="color: var(--accent-amber);"></i>
                 Récapitulatif de la séance
               </h3>
@@ -329,8 +331,8 @@
             <div class="modal-body">
               <div class="share-card">
                 <div style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700;">Séance Validée</div>
-                <h2 style="font-size: 2rem; font-weight: 900; margin: 0.3rem 0; color: white;">{{ recapitulatifSeance.exercice_nom }}</h2>
-                <div style="font-size: 4rem; font-weight: 900; color: var(--accent-cyan); line-height: 1;">
+                <h2 style="font-size: 2rem; font-weight: 700; margin: 0.3rem 0; color: white;">{{ recapitulatifSeance.exercice_nom }}</h2>
+                <div style="font-size: 4rem; font-weight: 700; color: var(--accent-cyan); line-height: 1;">
                   {{ recapitulatifSeance.total_repetitions }}
                 </div>
                 <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); margin-bottom: 1.2rem;">
@@ -340,15 +342,15 @@
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.2rem;">
                   <div>
                     <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Durée</span>
-                    <div style="font-size: 1.2rem; font-weight: 800;">{{ formatChrono(recapitulatifSeance.duree_secondes) }}</div>
+                    <div style="font-size: 1.2rem; font-weight: 700;">{{ formatChrono(recapitulatifSeance.duree_secondes) }}</div>
                   </div>
                   <div>
                     <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Calories</span>
-                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent-rose);">{{ recapitulatifSeance.calories_estimees }} kcal</div>
+                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--accent-rose);">{{ recapitulatifSeance.calories_estimees }} kcal</div>
                   </div>
                   <div>
                     <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Précision</span>
-                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent-green);">
+                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--accent-green);">
                       {{ recapitulatifSeance.total_repetitions > 0 ? Math.round((recapitulatifSeance.total_repetitions / (recapitulatifSeance.total_repetitions + (recapitulatifSeance.retours_correction?.length || 0))) * 100) : 100 }}%
                     </div>
                   </div>
@@ -415,7 +417,7 @@
                   <i class="fa-solid fa-star" v-for="s in exo.difficulte" :key="s"></i>
                 </span>
               </div>
-              <h3 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 0.4rem;">{{ exo.nom }}</h3>
+              <h3 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 0.4rem;">{{ exo.nom }}</h3>
               <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">{{ exo.description }}</p>
             </div>
 
@@ -480,12 +482,12 @@
               </span>
             </div>
 
-            <h3 style="font-size: 1.4rem; font-weight: 800;">{{ obj.exercice_nom }}</h3>
+            <h3 style="font-size: 1.4rem; font-weight: 700;">{{ obj.exercice_nom }}</h3>
             <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 0.8rem 0 0.4rem 0;">
-              <span style="font-size: 1.8rem; font-weight: 900; color: var(--accent-cyan);">
+              <span style="font-size: 1.8rem; font-weight: 700; color: var(--accent-cyan);">
                 {{ obj.total_actuel }} <span style="font-size: 1rem; color: var(--text-muted); font-weight: 500;">/ {{ obj.repetitions_cible }} reps</span>
               </span>
-              <span style="font-weight: 800; color: var(--accent-teal);">{{ obj.progression_pourcentage }}%</span>
+              <span style="font-weight: 700; color: var(--accent-teal);">{{ obj.progression_pourcentage }}%</span>
             </div>
 
             <div class="gauge-progress-container" style="height: 10px; margin-bottom: 0.5rem;">
@@ -530,7 +532,7 @@
                 <td><b style="color: var(--text-primary);">{{ s.exercice_nom }}</b></td>
                 <td>{{ s.groupe_musculaire }}</td>
                 <td>{{ formatChrono(s.duree_secondes) }}</td>
-                <td><span style="color: var(--accent-cyan); font-weight: 800;">{{ s.total_repetitions }}</span></td>
+                <td><span style="color: var(--accent-cyan); font-weight: 700;">{{ s.total_repetitions }}</span></td>
                 <td>{{ s.calories_estimees }} kcal</td>
                 <td>
                   <button class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" @click="voirDetailSeance(s.id)">
@@ -558,29 +560,29 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
           <div class="card" style="text-align: center;">
             <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Utilisateurs</span>
-            <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-cyan); margin: 0.3rem 0;">{{ adminStats.total_utilisateurs || 0 }}</div>
+            <div style="font-size: 2.2rem; font-weight: 700; color: var(--accent-cyan); margin: 0.3rem 0;">{{ adminStats.total_utilisateurs || 0 }}</div>
             <div style="font-size: 0.8rem; color: var(--text-secondary);">dont {{ adminStats.total_sportifs || 0 }} sportifs actifs</div>
           </div>
           <div class="card" style="text-align: center;">
             <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Séances Réalisées</span>
-            <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-teal); margin: 0.3rem 0;">{{ adminStats.total_seances || 0 }}</div>
+            <div style="font-size: 2.2rem; font-weight: 700; color: var(--accent-teal); margin: 0.3rem 0;">{{ adminStats.total_seances || 0 }}</div>
             <div style="font-size: 0.8rem; color: var(--text-secondary);">{{ adminStats.duree_totale_minutes || 0 }} minutes cumulées</div>
           </div>
           <div class="card" style="text-align: center;">
             <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Total Répétitions</span>
-            <div style="font-size: 2.2rem; font-weight: 900; color: white; margin: 0.3rem 0;">{{ adminStats.total_repetitions || 0 }}</div>
+            <div style="font-size: 2.2rem; font-weight: 700; color: white; margin: 0.3rem 0;">{{ adminStats.total_repetitions || 0 }}</div>
             <div style="font-size: 0.8rem; color: var(--accent-green);">Validées par IA</div>
           </div>
           <div class="card" style="text-align: center;">
             <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Taux Objectifs</span>
-            <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-amber); margin: 0.3rem 0;">{{ adminStats.taux_reussite_objectifs || 0 }}%</div>
+            <div style="font-size: 2.2rem; font-weight: 700; color: var(--accent-amber); margin: 0.3rem 0;">{{ adminStats.taux_reussite_objectifs || 0 }}%</div>
             <div style="font-size: 0.8rem; color: var(--text-secondary);">{{ adminStats.objectifs_atteints || 0 }} réussis</div>
           </div>
         </div>
 
         <!-- Table des Utilisateurs -->
         <div class="card" style="margin-bottom: 2rem;">
-          <h3 style="font-size: 1.15rem; font-weight: 800; margin-bottom: 1rem;"><i class="fa-solid fa-users"></i> Comptes Utilisateurs Enregistrés</h3>
+          <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem;"><i class="fa-solid fa-users"></i> Comptes Utilisateurs Enregistrés</h3>
           <div class="table-responsive">
             <table class="styled-table">
               <thead>
@@ -614,74 +616,131 @@
     <!-- MODALES DIALOGUES (Authentification, Profil, Formulaires)-->
     <!-- ======================================================== -->
 
-    <!-- Modale Authentification (Visiteur -> Sportif) -->
-    <div class="modal-backdrop" v-if="isAuthModalOpen">
-      <div class="modal-dialog">
-        <div class="modal-header">
-          <h3 style="font-size: 1.25rem; font-weight: 800;">
-            {{ authForm.mode === 'login' ? 'Connexion à votre compte' : 'Créer un compte Sportif' }}
-          </h3>
-          <button class="icon-btn" @click="isAuthModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-        <div class="modal-body">
-          <div style="display: flex; gap: 0.5rem; margin-bottom: 1.2rem;">
-            <button class="btn" :class="authForm.mode === 'login' ? 'btn-primary' : 'btn-secondary'" style="flex: 1;" @click="authForm.mode = 'login'">Se connecter</button>
-            <button class="btn" :class="authForm.mode === 'register' ? 'btn-primary' : 'btn-secondary'" style="flex: 1;" @click="authForm.mode = 'register'">S'inscrire</button>
-          </div>
-
-          <div v-if="authForm.mode === 'register'" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
-            <div class="form-group">
-              <label class="form-label">Nom</label>
-              <input class="form-input" v-model="authForm.nom" placeholder="Ex: Dupont">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Prénom</label>
-              <input class="form-input" v-model="authForm.prenom" placeholder="Ex: Jean">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Adresse Email</label>
-            <input class="form-input" type="email" v-model="authForm.email" placeholder="nom@exemple.com">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Mot de passe</label>
-            <input class="form-input" type="password" v-model="authForm.mot_de_passe" placeholder="••••••••">
-          </div>
-
-          <div v-if="authForm.mode === 'register'" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8rem;">
-            <div class="form-group">
-              <label class="form-label">Poids (kg)</label>
-              <input class="form-input" type="number" v-model="authForm.poids">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Taille (cm)</label>
-              <input class="form-input" type="number" v-model="authForm.taille">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Niveau</label>
-              <select class="form-select" v-model="authForm.niveau">
-                <option value="Débutant">Débutant</option>
-                <option value="Intermédiaire">Intermédiaire</option>
-                <option value="Avancé">Avancé</option>
-              </select>
-            </div>
+    <!-- PAGE CONNEXION / INSCRIPTION (plein écran) -->
+    <div class="auth-screen" v-if="isAuthModalOpen">
+      <!-- Photo en arrière-plan de toute la page : Alora Griffiths / Unsplash -->
+      <img class="auth-bg"
+           src="https://images.unsplash.com/photo-1532384748853-8f54a8f476e2?fm=jpg&q=75&w=1920&auto=format&fit=crop"
+           alt="" onerror="this.onerror=null;this.src='/images/femme-sport.svg'">
+      <div class="auth-bg-overlay"></div>
+      <!-- Panneau visuel -->
+      <aside class="auth-hero">
+        <div class="auth-brand"><i class="fa-solid fa-person-running"></i> AI Fitness <b>Counter</b></div>
+        <div class="auth-hero-body">
+          <h2>Bougez.<br>On compte<br><span>pour vous.</span></h2>
+          <p>Placez-vous devant la caméra : l'IA suit vos articulations, compte vos répétitions et corrige votre posture en temps réel.</p>
+          <div class="auth-chips">
+            <span><i class="fa-solid fa-bolt"></i> 30 images/s</span>
+            <span><i class="fa-solid fa-shield-halved"></i> Vidéo 100 % locale</span>
+            <span><i class="fa-solid fa-fire"></i> Calories estimées</span>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="isAuthModalOpen = false">Annuler</button>
-          <button class="btn btn-primary" @click="handleAuth">
-            {{ authForm.mode === 'login' ? 'Connexion' : 'Valider mon inscription' }}
-          </button>
+        <div class="auth-hero-stat">
+          <div><b>33</b><small>points clés suivis</small></div>
+          <div><b>+10</b><small>exercices</small></div>
+          <div><b>0</b><small>matériel requis</small></div>
         </div>
-      </div>
+      </aside>
+
+      <!-- Formulaire -->
+      <section class="auth-panel">
+        <button class="auth-close" @click="fermerAuth" title="Fermer"><i class="fa-solid fa-xmark"></i></button>
+
+        <div class="auth-card">
+          <h1>{{ authForm.mode === 'login' ? 'Bon retour parmi nous' : 'Créez votre compte' }}</h1>
+          <p class="auth-sub">
+            {{ authForm.mode === 'login'
+                ? 'Connectez-vous pour reprendre votre entraînement.'
+                : 'Quelques secondes pour commencer à vous entraîner.' }}
+          </p>
+
+          <div class="auth-reason" v-if="authPromptReason">
+            <i class="fa-solid fa-lock"></i> {{ authPromptReason }}
+          </div>
+
+          <div class="auth-tabs">
+            <button :class="{ on: authForm.mode === 'login' }" @click="authForm.mode = 'login'; authMessage = ''">Connexion</button>
+            <button :class="{ on: authForm.mode === 'register' }" @click="authForm.mode = 'register'; authMessage = ''">Inscription</button>
+          </div>
+
+          <form @submit.prevent="handleAuth" novalidate>
+            <div class="auth-row" v-if="authForm.mode === 'register'">
+              <label class="auth-field">
+                <span>Prénom</span>
+                <div class="auth-input"><i class="fa-regular fa-user"></i>
+                  <input v-model.trim="authForm.prenom" placeholder="Jean" autocomplete="given-name"></div>
+              </label>
+              <label class="auth-field">
+                <span>Nom</span>
+                <div class="auth-input"><i class="fa-regular fa-user"></i>
+                  <input v-model.trim="authForm.nom" placeholder="Dupont" autocomplete="family-name"></div>
+              </label>
+            </div>
+
+            <label class="auth-field">
+              <span>Adresse e-mail</span>
+              <div class="auth-input"><i class="fa-regular fa-envelope"></i>
+                <input type="email" v-model.trim="authForm.email" placeholder="nom@exemple.com" autocomplete="email"></div>
+            </label>
+
+            <label class="auth-field">
+              <span>Mot de passe</span>
+              <div class="auth-input"><i class="fa-solid fa-lock"></i>
+                <input :type="showPassword ? 'text' : 'password'" v-model="authForm.mot_de_passe"
+                       placeholder="••••••••" :autocomplete="authForm.mode === 'login' ? 'current-password' : 'new-password'">
+                <button type="button" class="eye" @click="showPassword = !showPassword" tabindex="-1">
+                  <i :class="showPassword ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye'"></i>
+                </button></div>
+            </label>
+
+            <template v-if="authForm.mode === 'register'">
+              <div class="auth-row">
+                <label class="auth-field">
+                  <span>Poids (kg)</span>
+                  <div class="auth-input"><i class="fa-solid fa-weight-scale"></i>
+                    <input type="number" min="30" max="250" v-model.number="authForm.poids"></div>
+                </label>
+                <label class="auth-field">
+                  <span>Taille (cm)</span>
+                  <div class="auth-input"><i class="fa-solid fa-ruler-vertical"></i>
+                    <input type="number" min="100" max="250" v-model.number="authForm.taille"></div>
+                </label>
+              </div>
+              <div class="auth-field">
+                <span>Votre niveau</span>
+                <div class="level-pills">
+                  <button type="button" v-for="n in ['Débutant','Intermédiaire','Avancé']" :key="n"
+                          :class="{ on: authForm.niveau === n }" @click="authForm.niveau = n">{{ n }}</button>
+                </div>
+              </div>
+            </template>
+
+            <div class="auth-msg" :class="authMessageType" v-if="authMessage">
+              <i class="fa-solid fa-circle-exclamation"></i> {{ authMessage }}
+            </div>
+
+            <button type="submit" class="auth-submit">
+              {{ authForm.mode === 'login' ? 'Se connecter' : 'Créer mon compte' }}
+              <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </form>
+
+          <p class="auth-switch">
+            <template v-if="authForm.mode === 'login'">Pas encore de compte ?
+              <a href="#" @click.prevent="authForm.mode = 'register'; authMessage = ''">S'inscrire</a></template>
+            <template v-else>Déjà inscrit ?
+              <a href="#" @click.prevent="authForm.mode = 'login'; authMessage = ''">Se connecter</a></template>
+          </p>
+          <p class="auth-visitor"><a href="#" @click.prevent="fermerAuth">Continuer en tant que visiteur (catalogue)</a></p>
+        </div>
+      </section>
     </div>
 
     <!-- Modale Nouvel Objectif (Sportif) -->
     <div class="modal-backdrop" v-if="isNewObjModalOpen">
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 style="font-size: 1.25rem; font-weight: 800;"><i class="fa-solid fa-bullseye" style="color: var(--accent-cyan);"></i> Définir un Nouvel Objectif</h3>
+          <h3 style="font-size: 1.25rem; font-weight: 700;"><i class="fa-solid fa-bullseye" style="color: var(--accent-cyan);"></i> Définir un Nouvel Objectif</h3>
           <button class="icon-btn" @click="isNewObjModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
@@ -715,7 +774,7 @@
     <div class="modal-backdrop" v-if="isNewExoModalOpen">
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 style="font-size: 1.25rem; font-weight: 800;">
+          <h3 style="font-size: 1.25rem; font-weight: 700;">
             {{ nouvelExercice.id ? 'Paramétrer la règle de comptage' : 'Ajouter un exercice au catalogue' }}
           </h3>
           <button class="icon-btn" @click="isNewExoModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
@@ -745,7 +804,7 @@
           </div>
 
           <div style="background: var(--bg-primary); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 1rem;">
-            <h4 style="font-size: 0.85rem; font-weight: 800; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 0.8rem;">
+            <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 0.8rem;">
               <i class="fa-solid fa-sliders"></i> Paramètres de la Règle de Comptage (RegleDeComptage)
             </h4>
             <div class="form-group">
@@ -788,16 +847,16 @@
     <div class="modal-backdrop" v-if="isDetailModalOpen && detailSeance">
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 style="font-size: 1.25rem; font-weight: 800;">Détail de la Séance #{{ detailSeance.id }}</h3>
+          <h3 style="font-size: 1.25rem; font-weight: 700;">Détail de la Séance #{{ detailSeance.id }}</h3>
           <button class="icon-btn" @click="isDetailModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
           <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem;">
             <div>
-              <h4 style="font-size: 1.3rem; font-weight: 800; color: var(--accent-cyan);">{{ detailSeance.exercice_nom }}</h4>
+              <h4 style="font-size: 1.3rem; font-weight: 700; color: var(--accent-cyan);">{{ detailSeance.exercice_nom }}</h4>
               <span style="font-size: 0.85rem; color: var(--text-muted);">{{ new Date(detailSeance.date_debut).toLocaleString() }}</span>
             </div>
-            <div style="font-size: 1.8rem; font-weight: 900; color: white;">{{ detailSeance.total_repetitions }} reps</div>
+            <div style="font-size: 1.8rem; font-weight: 700; color: white;">{{ detailSeance.total_repetitions }} reps</div>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.2rem;">

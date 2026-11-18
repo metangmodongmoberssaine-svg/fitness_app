@@ -44,7 +44,7 @@
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 22px;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 * {
@@ -1037,3 +1037,234 @@ body {
   border-color: var(--violet-electrique);
   transform: translateY(-2px);
 }
+
+
+/* ==========================================================================
+   THÈME "FITNESS MODERNE" (inspiré BetterFit) — noir profond + vert citron
+   Pour changer toutes les couleurs de l'app : modifiez uniquement ce bloc.
+   ========================================================================== */
+:root {
+  --lime: #c8f05a;
+  --lime-dark: #a6d13a;
+  --ink: #0d0d10;
+  --ink-2: #16161b;
+  --ink-3: #1f1f26;
+  --line: rgba(255, 255, 255, 0.08);
+
+  /* Alias utilisés par index.html (non définis auparavant) */
+  --bg-primary: var(--ink);
+  --bg-secondary: var(--ink-2);
+  --border-color: var(--line);
+  --text-primary: #f5f5f7;
+  --text-secondary: #b4b4c0;
+  --text-muted: #7c7c8a;
+  --accent-cyan: var(--lime);
+  --accent-teal: var(--lime);
+  --accent-green: #4ade80;
+  --accent-rose: #ff6b6b;
+  --accent-amber: #ffb84d;
+
+  /* On redirige l'ancienne palette violette vers la nouvelle */
+  --violet-electrique: var(--lime);
+  --violet-electrique-dark: var(--lime-dark);
+  --violet-electrique-light: var(--lime);
+  --violet-electrique-gradient: linear-gradient(135deg, #d6f56f 0%, #b5e045 100%);
+  --violet-shadow-glow: 0 8px 24px rgba(200, 240, 90, 0.25);
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+}
+
+body { background: var(--ink); }
+.card { background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.btn { border-radius: 999px; }
+.btn-primary { background: var(--lime); color: #111; font-weight: 800; border: none; box-shadow: none; }
+.btn-primary:hover { background: var(--lime-dark); transform: translateY(-1px); }
+.btn-secondary { background: var(--ink-3); color: var(--text-primary); border: 1px solid var(--line); }
+.btn-pill { padding: 0.55rem 1.1rem; font-size: 0.85rem; }
+.navbar { background: rgba(13, 13, 16, 0.85); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+.nav-item.active { background: var(--lime); color: #111; }
+.brand-icon { background: var(--lime); color: #111; }
+.brand-gradient { background: none; -webkit-text-fill-color: var(--lime); color: var(--lime); }
+.db-badge { display: none; }
+.form-input, .form-select, .form-textarea { background: var(--ink-3); border-radius: var(--radius-sm); }
+
+.nav-auth { display: flex; gap: 0.5rem; }
+.demo-switch { display: flex; gap: 2px; opacity: 0.45; transition: opacity .2s; }
+.demo-switch:hover { opacity: 1; }
+.demo-switch button { background: var(--ink-3); color: var(--text-muted); border: 1px solid var(--line);
+  font-size: 0.7rem; padding: 0.3rem 0.55rem; cursor: pointer; border-radius: 8px; }
+
+/* ---------- PAGE CONNEXION / INSCRIPTION ---------- */
+.auth-screen { position: fixed; inset: 0; z-index: 200; display: grid; grid-template-columns: 1.1fr 1fr;
+  background: var(--ink); overflow-y: auto; }
+
+.auth-hero { position: relative; padding: 2.5rem; display: flex; flex-direction: column; justify-content: space-between;
+  background:
+    radial-gradient(circle at 80% 15%, rgba(200,240,90,.35), transparent 45%),
+    radial-gradient(circle at 10% 90%, rgba(200,240,90,.15), transparent 40%),
+    linear-gradient(160deg, #14141a 0%, #0a0a0d 100%);
+  border-right: 1px solid var(--line); }
+.auth-brand { font-size: 1.15rem; font-weight: 700; display: flex; gap: .6rem; align-items: center; }
+.auth-brand i { background: var(--lime); color: #111; width: 38px; height: 38px; border-radius: 12px;
+  display: grid; place-items: center; }
+.auth-brand b { color: var(--lime); }
+.auth-hero-body h2 { font-size: clamp(2.4rem, 4.5vw, 4rem); line-height: 1.02; font-weight: 900; letter-spacing: -.03em; }
+.auth-hero-body h2 span { color: var(--lime); }
+.auth-hero-body p { margin-top: 1.1rem; max-width: 440px; color: var(--text-secondary); line-height: 1.6; }
+.auth-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.4rem; }
+.auth-chips span { background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 999px;
+  padding: .45rem .9rem; font-size: .8rem; color: var(--text-primary); }
+.auth-chips i { color: var(--lime); margin-right: .35rem; }
+.auth-hero-stat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
+  background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 1.1rem 1.3rem; }
+.auth-hero-stat b { display: block; font-size: 1.7rem; font-weight: 900; color: var(--lime); }
+.auth-hero-stat small { color: var(--text-muted); font-size: .75rem; }
+
+.auth-panel { position: relative; display: flex; align-items: center; justify-content: center; padding: 2rem 1.2rem; }
+.auth-close { position: absolute; top: 1.2rem; right: 1.2rem; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--ink-3); border: 1px solid var(--line); color: var(--text-primary); cursor: pointer; }
+.auth-card { width: 100%; max-width: 440px; }
+.auth-card h1 { font-size: 2rem; font-weight: 900; letter-spacing: -.02em; }
+.auth-sub { color: var(--text-secondary); margin: .4rem 0 1.4rem; }
+.auth-reason { background: rgba(200,240,90,.1); border: 1px solid rgba(200,240,90,.3); color: var(--lime);
+  border-radius: var(--radius-sm); padding: .75rem 1rem; font-size: .85rem; margin-bottom: 1.2rem; line-height: 1.45; }
+.auth-reason i { margin-right: .4rem; }
+
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--ink-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px; margin-bottom: 1.3rem; }
+.auth-tabs button { border: none; background: transparent; color: var(--text-secondary); padding: .65rem;
+  border-radius: 999px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.auth-tabs button.on { background: var(--lime); color: #111; }
+
+.auth-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: .8rem; }
+.auth-row > * { min-width: 0; }
+.auth-field { display: block; margin-bottom: 1rem; }
+.auth-field > span { display: block; font-size: .78rem; font-weight: 600; color: var(--text-secondary); margin-bottom: .4rem; }
+.auth-input { display: flex; align-items: center; gap: .6rem; background: var(--ink-2); border: 1px solid var(--line);
+  border-radius: 16px; padding: 0 1rem; transition: border-color .2s, box-shadow .2s; }
+.auth-input:focus-within { border-color: var(--lime); box-shadow: 0 0 0 3px rgba(200,240,90,.15); }
+.auth-input i { color: var(--text-muted); font-size: .9rem; }
+.auth-input input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text-primary);
+  padding: .95rem 0; font-size: .95rem; font-family: inherit; }
+.auth-input .eye { background: none; border: none; color: var(--text-muted); cursor: pointer; }
+
+.level-pills { display: flex; gap: .5rem; flex-wrap: wrap; }
+.level-pills button { flex: 1; background: var(--ink-2); border: 1px solid var(--line); color: var(--text-secondary);
+  padding: .7rem .5rem; border-radius: 999px; cursor: pointer; font-weight: 600; font-family: inherit; font-size: .82rem; }
+.level-pills button.on { background: rgba(200,240,90,.15); border-color: var(--lime); color: var(--lime); }
+
+.auth-msg { background: rgba(255,107,107,.12); border: 1px solid rgba(255,107,107,.35); color: #ff9a9a;
+  padding: .7rem 1rem; border-radius: 14px; font-size: .85rem; margin-bottom: 1rem; }
+.auth-submit { width: 100%; background: var(--lime); color: #111; border: none; border-radius: 999px; padding: 1.05rem;
+  font-size: 1rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  gap: .6rem; font-family: inherit; transition: transform .15s, background .2s; }
+.auth-submit:hover { background: var(--lime-dark); transform: translateY(-1px); }
+.auth-switch, .auth-visitor { text-align: center; margin-top: 1.1rem; font-size: .88rem; color: var(--text-secondary); }
+.auth-switch a { color: var(--lime); font-weight: 700; text-decoration: none; }
+.auth-visitor a { color: var(--text-muted); text-decoration: underline; }
+
+@media (max-width: 900px) {
+  .auth-screen { grid-template-columns: 1fr; }
+  .auth-hero { display: none; }
+  .auth-panel { align-items: flex-start; padding-top: 4rem; }
+}
+
+/* Détails finaux */
+.user-role-tag { background: rgba(200,240,90,.15) !important; color: var(--lime) !important; }
+.avatar { background: var(--lime) !important; color: #111 !important; }
+.card:hover { border-color: rgba(200,240,90,.35); }
+
+
+/* ==========================================================================
+   TYPOGRAPHIE PROFESSIONNELLE
+   ========================================================================== */
+:root { --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body { font-family: var(--font-sans); font-size: 15px; line-height: 1.6; font-weight: 400; letter-spacing: -0.005em; }
+button, input, select, textarea { font-family: inherit; }
+h1, h2, h3, h4, .header-title { font-weight: 700 !important; letter-spacing: -0.02em; line-height: 1.2; }
+.header-title { font-size: 1.75rem; }
+.header-subtitle, .auth-sub { font-weight: 400; color: var(--text-secondary); }
+.btn, .auth-submit, .nav-item { font-weight: 600 !important; letter-spacing: 0; }
+.counter-value, .auth-hero-stat b { font-weight: 700 !important; font-variant-numeric: tabular-nums; }
+.form-label, .auth-field > span { font-weight: 500; letter-spacing: .01em; }
+
+/* ==========================================================================
+   IMAGE DE FOND : page connexion / inscription
+   Placez votre photo dans  frontend/public/images/femme-sport.jpg
+   ========================================================================== */
+.auth-screen {
+  background-color: #0b0b0e;
+  background-image:
+    linear-gradient(90deg, rgba(8,8,10,.82) 0%, rgba(8,8,10,.25) 50%, rgba(8,8,10,.6) 100%),
+    url('/images/femme-sport.jpg'),
+    url('/images/femme-sport.svg');
+  background-size: cover;
+  background-position: center 20%;
+  background-repeat: no-repeat;
+}
+.auth-hero { background: transparent !important; border-right: none; }
+.auth-hero-body h2 { font-weight: 700; letter-spacing: -0.035em; }
+.auth-hero-stat, .auth-chips span { background: rgba(255,255,255,.08); backdrop-filter: blur(10px); }
+.auth-card {
+  background: rgba(16,16,20,.72);
+  backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 28px; padding: 2.2rem 2rem;
+  box-shadow: 0 30px 80px rgba(0,0,0,.5);
+}
+.auth-card h1 { font-size: 1.7rem; font-weight: 700; }
+.auth-input, .auth-tabs, .level-pills button { background: rgba(255,255,255,.06); }
+@media (max-width: 900px) { .auth-card { padding: 1.6rem 1.2rem; } }
+
+
+/* ==========================================================================
+   PAGE CONNEXION / INSCRIPTION : photo en fond de la partie GAUCHE
+   (la photo est insérée par la balise <img class="auth-hero-bg"> dans index.html)
+   ========================================================================== */
+.auth-screen {
+  background: #0b0b0e !important;              /* on retire l'ancien fond plein écran */
+  grid-template-columns: 1.15fr 1fr;
+}
+.auth-hero { position: relative; overflow: hidden; background: #0b0b0e !important; }
+.auth-hero-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center 25%;                 /* ajustez : 0% = haut de la photo, 100% = bas */
+  z-index: 0;
+}
+.auth-hero::after {                            /* voile sombre pour garder le texte lisible */
+  content: ""; position: absolute; inset: 0; z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(8,8,10,.55) 0%, rgba(8,8,10,.10) 35%, rgba(8,8,10,.85) 100%),
+    linear-gradient(90deg, rgba(8,8,10,.55) 0%, rgba(8,8,10,0) 70%),
+    linear-gradient(0deg, rgba(200,240,90,.10), rgba(200,240,90,0) 40%);
+}
+.auth-hero > *:not(.auth-hero-bg) { position: relative; z-index: 2; }
+.auth-panel {
+  background:
+    radial-gradient(circle at 80% 10%, rgba(200,240,90,.10), transparent 45%),
+    #0b0b0e;
+}
+.auth-card { background: rgba(255,255,255,.03); box-shadow: none; }
+@media (max-width: 900px) { .auth-hero { display: none; } }
+
+
+/* ==========================================================================
+   PHOTO EN ARRIÈRE-PLAN DE TOUTE LA PAGE CONNEXION / INSCRIPTION
+   ========================================================================== */
+.auth-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  object-position: center 25%; z-index: 0; }            /* 0% = haut de la photo, 100% = bas */
+.auth-bg-overlay { position: absolute; inset: 0; z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(8,8,10,.80) 0%, rgba(8,8,10,.35) 55%, rgba(8,8,10,.70) 100%),
+    linear-gradient(0deg, rgba(8,8,10,.65) 0%, rgba(8,8,10,0) 45%); }
+.auth-screen { background: #0b0b0e !important; }
+.auth-hero, .auth-panel { position: relative; z-index: 2; background: transparent !important; overflow: visible; }
+.auth-hero::after { display: none; }
+.auth-hero-bg { display: none; }
+.auth-close { z-index: 3; }
+.auth-card { background: rgba(14,14,18,.62); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,.12); box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+@media (max-width: 900px) { .auth-bg-overlay { background: rgba(8,8,10,.72); } }
