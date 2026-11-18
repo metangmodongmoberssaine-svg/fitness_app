@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Fitness Counter - Décompte d'exercices par Vision par Ordinateur</title>
+  <link rel="stylesheet" href="/style.css">
+  <!-- Polices Google Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Vue 3 -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+  <!-- MediaPipe Pose & Camera Utils -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- BARRE DE NAVIGATION -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-person-running"></i>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span>AI Fitness <span class="brand-gradient">Counter</span></span>
+          <span class="db-badge"><i class="fa-solid fa-database"></i> MySQL</span>
+        </div>
+      </div>
+
+      <nav class="nav-links">
+        <button class="nav-item" :class="{ active: activeView === 'workout' }" @click="activeView = 'workout'">
+          <i class="fa-solid fa-dumbbell"></i> Séance en direct
+        </button>
+        <button class="nav-item" :class="{ active: activeView === 'catalogue' }" @click="activeView = 'catalogue'">
+          <i class="fa-solid fa-list-check"></i> Catalogue
+        </button>
+        <button class="nav-item" :class="{ active: activeView === 'objectifs' }" @click="activeView = 'objectifs'" v-if="currentUser.role !== 'visiteur'">
+          <i class="fa-solid fa-bullseye"></i> Mes Objectifs
+        </button>
+        <button class="nav-item" :class="{ active: activeView === 'historique' }" @click="activeView = 'historique'" v-if="currentUser.role !== 'visiteur'">
+          <i class="fa-solid fa-chart-line"></i> Historique
+        </button>
+        <button class="nav-item" :class="{ active: activeView === 'admin' }" @click="activeView = 'admin'" v-if="currentUser.role === 'administrateur'">
+          <i class="fa-solid fa-shield-halved"></i> Administration
+        </button>
+      </nav>
+
+      <div class="nav-actions">
+        <!-- Cloche de Notifications (Acteur secondaire Service de notification) -->
+        <button class="icon-btn" @click="isNotifOpen = !isNotifOpen" title="Notifications">
+          <i class="fa-regular fa-bell"></i>
+          <span class="badge-count" v-if="notifications.length > 0">{{ notifications.length }}</span>
+        </button>
+
+        <!-- Dropdown / Profil Utilisateur -->
+        <div class="user-badge" @click="isProfileModalOpen = true">
+          <div class="avatar">{{ currentUser.prenom ? currentUser.prenom[0] : 'U' }}</div>
+          <div style="font-size: 0.85rem; font-weight: 700; line-height: 1.2;">
+            <div>{{ currentUser.prenom }} {{ currentUser.nom }}</div>
+            <span class="user-role-tag">{{ currentUser.role }}</span>
+          </div>
+        </div>
+
+        <!-- Changement Rapide de Rôle pour Démo / Soutenance -->
+        <div style="display: flex; gap: 0.3rem;">
+          <button class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;" @click="switchUserFast('sportif', 2, 'Dupont', 'Jean', 'jean@fitness.ai')" title="Tester en tant que Sportif">
+            Sportif
+          </button>
+          <button class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;" @click="switchUserFast('administrateur', 1, 'Admin', 'Super', 'admin@fitness.ai')" title="Tester en tant qu'Administrateur">
+            Admin
+          </button>
+          <button class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;" @click="seDeconnecter" title="Tester en tant que Visiteur">
+            Visiteur
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- POPUP NOTIFICATIONS -->
+    <div v-if="isNotifOpen" class="card" style="position: absolute; top: 70px; right: 2rem; width: 360px; z-index: 60; box-shadow: 0 15px 35px rgba(0,0,0,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+        <h4 style="font-size: 0.95rem; font-weight: 700;"><i class="fa-solid fa-bell" style="color: var(--accent-cyan);"></i> Notifications Push</h4>
+        <button class="icon-btn" style="width: 28px; height: 28px;" @click="isNotifOpen = false"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div v-if="notifications.length === 0" style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem 0;">
+        Aucune notification pour le moment.
+      </div>
+      <div v-else style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 280px; overflow-y: auto;">
+        <div v-for="n in notifications" :key="n.id" style="background: var(--bg-secondary); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.85rem;">
+          <div style="color: var(--text-primary); font-weight: 600;">{{ n.message }}</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem;">Canal: {{ n.canal }} • {{ new Date(n.date_envoi).toLocaleTimeString() }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENU PRINCIPAL -->
+    <main class="container">
+
+      <!-- ========================================== -->
+      <!-- VUE 1 : SÉANCE EN DIRECT (WORKOUT ROOM)   -->
+      <!-- ========================================== -->
+      <section v-if="activeView === 'workout'">
+        <div class="page-header">
+          <div>
+            <h1 class="header-title">
+              <i class="fa-solid fa-video" style="color: var(--accent-cyan);"></i>
+              Salle de décompte en temps réel
+            </h1>
+            <p class="header-subtitle">
+              Analyse de la posture et comptage automatique par vision artificielle (MediaPipe 33 points clés).
+            </p>
+          </div>
+
+          <!-- Sélecteur d'exercice & source vidéo avant lancement -->
+          <div v-if="sessionState.statut === 'non_demarre'" style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;">
+            <div style="min-width: 220px;">
+              <select class="form-select" v-model="selectedExercice" style="background: var(--bg-secondary); font-weight: 700;">
+                <option v-for="exo in catalogue" :key="exo.id" :value="exo">
+                  {{ exo.nom }} ({{ exo.groupe_musculaire }})
+                </option>
+              </select>
+            </div>
+
+            <!-- Choix Source : Webcam vs Échantillons Vidéos fournis dans le projet -->
+            <select class="form-select" v-model="selectedVideoSource" style="background: var(--bg-secondary);">
+              <option value="webcam">📹 Caméra en direct (Webcam)</option>
+              <option value="sample">🎬 Vidéo de test (Échantillons du projet)</option>
+            </select>
+
+            <select v-if="selectedVideoSource === 'sample'" class="form-select" v-model="selectedSampleFile" style="background: var(--bg-secondary);">
+              <option v-for="s in sampleVideos" :key="s.filename" :value="s.url">
+                {{ s.filename }}
+              </option>
+            </select>
+
+            <button class="btn btn-primary" @click="lancerSeance">
+              <i class="fa-solid fa-play"></i> Démarrer la séance
+            </button>
+          </div>
+        </div>
+
+        <!-- Zone d'entraînement (Viewport Caméra + Métriques) -->
+        <div class="workout-grid">
+          <!-- Colonne Gauche : Vidéo + Canvas MediaPipe -->
+          <div class="card" style="padding: 1rem; position: relative;">
+            <div class="video-viewport" :class="{ 'active-session': sessionState.statut === 'en_cours' }">
+              <video ref="videoElement" playsinline muted autoplay></video>
+              <canvas ref="canvasElement"></canvas>
+
+              <!-- Bannière Overlay Supérieure -->
+              <div class="video-overlay-banner" v-if="sessionState.statut !== 'non_demarre'">
+                <div class="phase-pill">
+                  <div class="phase-dot" :class="{ basse: sessionState.phaseCourante === 'basse' }"></div>
+                  <span>Phase : {{ sessionState.phaseCourante === 'basse' ? 'Basse (Flexion)' : 'Haute (Extension)' }}</span>
+                </div>
+                <div class="fps-badge">
+                  <i class="fa-solid fa-bolt" style="color: var(--accent-amber);"></i> {{ sessionState.fps || 30 }} FPS
+                </div>
+              </div>
+
+              <!-- Message d'Aide : Personne non détectée (Figure 5, messages 9-10) -->
+              <div class="center-alert" v-if="sessionState.statut === 'en_cours' && !sessionState.personneDetectee">
+                <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; color: var(--accent-amber); margin-bottom: 0.5rem;"></i>
+                <div style="font-size: 1.15rem; font-weight: 800;">Placez-vous dans le cadre</div>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                  Reculez afin que vos articulations soient visibles par la caméra.
+                </p>
+              </div>
+
+              <!-- Toast de Correction de Posture (Figure 5, messages 7-8) -->
+              <div class="posture-feedback-toast" v-if="sessionState.statut === 'en_cours' && sessionState.derniereCorrection">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span>{{ sessionState.derniereCorrection.message }}</span>
+              </div>
+
+              <!-- Écran de Pause (Figure 6 - opt [pause]) -->
+              <div class="pause-overlay" v-if="sessionState.statut === 'en_pause'">
+                <i class="fa-solid fa-circle-pause" style="font-size: 3.5rem; color: var(--accent-cyan);"></i>
+                <div style="font-size: 1.5rem; font-weight: 800;">Séance en Pause</div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">L'analyse de vision par ordinateur est suspendue.</p>
+                <button class="btn btn-primary" @click="reprendre" style="margin-top: 0.5rem;">
+                  <i class="fa-solid fa-play"></i> Reprendre la séance
+                </button>
+              </div>
+
+              <!-- Écran de Bienvenue / Pré-démarrage -->
+              <div class="pause-overlay" v-if="sessionState.statut === 'non_demarre'">
+                <i class="fa-solid fa-camera-rotate" style="font-size: 3rem; color: var(--accent-teal); margin-bottom: 0.5rem;"></i>
+                <div style="font-size: 1.3rem; font-weight: 800;">Prêt pour votre entraînement ?</div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 450px; text-align: center;">
+                  Choisissez un exercice, placez-vous face à la caméra et cliquez sur <b>Démarrer la séance</b>.
+                </p>
+                <div style="display: flex; gap: 0.6rem; margin-top: 0.5rem;">
+                  <button class="btn btn-primary" @click="lancerSeance">
+                    <i class="fa-solid fa-play"></i> Lancer maintenant
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Consigne de placement & Règles d'angles de l'exercice (Figure 4, message 6) -->
+            <div style="margin-top: 1rem; background: var(--bg-secondary); padding: 1rem 1.2rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem;">
+              <div>
+                <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Exercice sélectionné</span>
+                <div style="font-size: 1.1rem; font-weight: 800; color: var(--accent-cyan);">
+                  {{ selectedExercice?.nom }}
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                  {{ selectedExercice?.description }}
+                </div>
+              </div>
+              <div style="display: flex; gap: 1rem; font-size: 0.85rem; text-align: right;">
+                <div>
+                  <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Articulation</span>
+                  <b style="color: var(--text-primary); text-transform: capitalize;">{{ selectedExercice?.regle?.articulation_cle || 'Genou' }}</b>
+                </div>
+                <div>
+                  <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Seuils H/B</span>
+                  <b style="color: var(--accent-teal);">{{ selectedExercice?.regle?.angle_haut }}° / {{ selectedExercice?.regle?.angle_bas }}°</b>
+                </div>
+                <div>
+                  <span style="color: var(--text-muted); font-size: 0.75rem; display: block;">Tolérance</span>
+                  <b style="color: var(--text-primary);">±{{ selectedExercice?.regle?.tolerance || 10 }}°</b>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Colonne Droite : Métriques Live & Contrôles -->
+          <div class="stats-panel">
+            <!-- Grand Compteur de Répétitions -->
+            <div class="big-counter-card">
+              <span class="counter-label">Répétitions Validées</span>
+              <div class="counter-value" :class="{ 'rep-pop': sessionState.repJusteIncr }">
+                {{ sessionState.totalRepetitions }}
+              </div>
+              <div style="display: flex; justify-content: center; gap: 1.5rem; font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                <div><i class="fa-solid fa-clock" style="color: var(--accent-cyan);"></i> Chrono : <b>{{ formatChrono(sessionState.dureeSecondes) }}</b></div>
+                <div><i class="fa-solid fa-fire" style="color: var(--accent-rose);"></i> Énergie : <b>{{ sessionState.calories }} kcal</b></div>
+              </div>
+            </div>
+
+            <!-- Jauge Angulaire de l'Articulation en Temps Réel -->
+            <div class="card" style="padding: 1.2rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary);">
+                  Angle Articulaire Mesuré (θ)
+                </span>
+                <span style="font-size: 1.4rem; font-weight: 800; color: var(--accent-cyan);">
+                  {{ sessionState.angleCourant }}°
+                </span>
+              </div>
+              <div class="gauge-progress-container">
+                <div class="gauge-bar" :style="{ width: `${Math.min(100, Math.max(0, (sessionState.angleCourant / 180) * 100))}%` }"></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem;">
+                <span>0° (Flexion max)</span>
+                <span>Seuil bas : {{ selectedExercice?.regle?.angle_bas }}°</span>
+                <span>Seuil haut : {{ selectedExercice?.regle?.angle_haut }}°</span>
+                <span>180°</span>
+              </div>
+            </div>
+
+            <!-- Grille Métriques Secondaires -->
+            <div class="session-metrics-grid">
+              <div class="metric-box">
+                <div class="metric-val" style="color: var(--accent-green);">
+                  {{ sessionState.historiqueRepetitions.filter(r => r.est_correcte).length }}
+                </div>
+                <div class="metric-title">Reps Parfaites</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-val" style="color: var(--accent-amber);">
+                  {{ sessionState.historiqueCorrections.length }}
+                </div>
+                <div class="metric-title">Corrections</div>
+              </div>
+            </div>
+
+            <!-- Boutons de Contrôle de Séance (Figures 6 & 7) -->
+            <div class="card" style="padding: 1.2rem; display: flex; flex-direction: column; gap: 0.8rem;" v-if="sessionState.statut !== 'non_demarre'">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
+                <button v-if="sessionState.statut === 'en_cours'" class="btn btn-warning" @click="mettreEnPause">
+                  <i class="fa-solid fa-pause"></i> Mettre en pause
+                </button>
+                <button v-if="sessionState.statut === 'en_pause'" class="btn btn-primary" @click="reprendre">
+                  <i class="fa-solid fa-play"></i> Reprendre
+                </button>
+                <button class="btn btn-danger" @click="terminerSeance">
+                  <i class="fa-solid fa-stop"></i> Terminer
+                </button>
+              </div>
+            </div>
+
+            <!-- Mini Journal des Corrections de Posture Émises -->
+            <div class="card" style="padding: 1.2rem; flex: 1; min-height: 150px; overflow-y: auto;">
+              <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">
+                <i class="fa-solid fa-stethoscope"></i> Retours d'IA Posturale
+              </span>
+              <div v-if="sessionState.historiqueCorrections.length === 0" style="color: var(--text-muted); font-size: 0.85rem; font-style: italic;">
+                Posture exemplaire ! Aucune anomalie détectée pour l'instant.
+              </div>
+              <div v-else style="display: flex; flex-direction: column; gap: 0.4rem;">
+                <div v-for="(c, idx) in sessionState.historiqueCorrections.slice(-3)" :key="idx" style="font-size: 0.8rem; padding: 0.4rem 0.6rem; border-radius: 4px; background: rgba(244, 63, 94, 0.15); color: #fda4af; border-left: 3px solid var(--accent-rose);">
+                  {{ c.message }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- MODAL / CARTE RÉCAPITULATIF DE SÉANCE (Figure 6 & 7)     -->
+        <!-- ======================================================== -->
+        <div class="modal-backdrop" v-if="recapitulatifSeance">
+          <div class="modal-dialog">
+            <div class="modal-header">
+              <h3 style="font-size: 1.3rem; font-weight: 800; display: flex; align-items: center; gap: 0.6rem;">
+                <i class="fa-solid fa-trophy" style="color: var(--accent-amber);"></i>
+                Récapitulatif de la séance
+              </h3>
+              <button class="icon-btn" @click="recapitulatifSeance = null"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+              <div class="share-card">
+                <div style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700;">Séance Validée</div>
+                <h2 style="font-size: 2rem; font-weight: 900; margin: 0.3rem 0; color: white;">{{ recapitulatifSeance.exercice_nom }}</h2>
+                <div style="font-size: 4rem; font-weight: 900; color: var(--accent-cyan); line-height: 1;">
+                  {{ recapitulatifSeance.total_repetitions }}
+                </div>
+                <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); margin-bottom: 1.2rem;">
+                  Répétitions Complétées
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.2rem;">
+                  <div>
+                    <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Durée</span>
+                    <div style="font-size: 1.2rem; font-weight: 800;">{{ formatChrono(recapitulatifSeance.duree_secondes) }}</div>
+                  </div>
+                  <div>
+                    <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Calories</span>
+                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent-rose);">{{ recapitulatifSeance.calories_estimees }} kcal</div>
+                  </div>
+                  <div>
+                    <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Précision</span>
+                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent-green);">
+                      {{ recapitulatifSeance.total_repetitions > 0 ? Math.round((recapitulatifSeance.total_repetitions / (recapitulatifSeance.total_repetitions + (recapitulatifSeance.retours_correction?.length || 0))) * 100) : 100 }}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Détail des Répétitions Chronométrées -->
+              <div style="margin-top: 1.2rem;" v-if="recapitulatifSeance.repetitions?.length > 0">
+                <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem;">Cadence et Amplitude des Répétitions</h4>
+                <div style="max-height: 160px; overflow-y: auto; background: var(--bg-primary); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <table class="styled-table">
+                    <thead>
+                      <tr>
+                        <th>N°</th>
+                        <th>Durée</th>
+                        <th>Amplitude</th>
+                        <th>Validité</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="r in recapitulatifSeance.repetitions" :key="r.numero">
+                        <td>#{{ r.numero }}</td>
+                        <td>{{ (r.duree_ms / 1000).toFixed(2) }} s</td>
+                        <td>{{ r.amplitude }}°</td>
+                        <td><span style="color: var(--accent-green); font-weight: 700;">Valide</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" @click="recapitulatifSeance = null">Fermer</button>
+              <button class="btn btn-primary" @click="copierTextePartage">
+                <i class="fa-solid fa-share-nodes"></i> Partager le résultat
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VUE 2 : CATALOGUE D'EXERCICES             -->
+      <!-- ========================================== -->
+      <section v-if="activeView === 'catalogue'">
+        <div class="page-header">
+          <div>
+            <h1 class="header-title"><i class="fa-solid fa-book-open" style="color: var(--accent-cyan);"></i> Catalogue des Mouvements</h1>
+            <p class="header-subtitle">Découvrez les exercices supportés par l'analyse biomécanique en temps réel.</p>
+          </div>
+          <button class="btn btn-primary" v-if="currentUser.role === 'administrateur'" @click="nouvelExercice.id = null; isNewExoModalOpen = true;">
+            <i class="fa-solid fa-plus"></i> Ajouter un exercice
+          </button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
+          <div class="card" v-for="exo in catalogue" :key="exo.id" style="display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem;">
+                <span class="user-role-tag" style="background: rgba(20, 184, 166, 0.15); color: var(--accent-teal);">
+                  {{ exo.groupe_musculaire }}
+                </span>
+                <span style="font-size: 0.8rem; color: var(--accent-amber);">
+                  <i class="fa-solid fa-star" v-for="s in exo.difficulte" :key="s"></i>
+                </span>
+              </div>
+              <h3 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 0.4rem;">{{ exo.nom }}</h3>
+              <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">{{ exo.description }}</p>
+            </div>
+
+            <div>
+              <div style="background: var(--bg-secondary); padding: 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.8rem; margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Articulation suivie :</span>
+                  <b style="color: var(--text-primary); text-transform: capitalize;">{{ exo.regle?.articulation_cle }}</b>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 0.3rem;">
+                  <span style="color: var(--text-muted);">Angles Haut / Bas :</span>
+                  <b style="color: var(--accent-cyan);">{{ exo.regle?.angle_haut }}° / {{ exo.regle?.angle_bas }}°</b>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="btn btn-primary" style="flex: 1;" @click="choisirExercice(exo)">
+                  <i class="fa-solid fa-play"></i> S'entraîner
+                </button>
+                <button v-if="currentUser.role === 'administrateur'" class="btn btn-secondary" @click="ouvrirModifExercice(exo)" title="Modifier les règles">
+                  <i class="fa-solid fa-gear"></i>
+                </button>
+                <button v-if="currentUser.role === 'administrateur'" class="btn btn-danger" @click="supprimerExercice(exo.id)" title="Supprimer">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VUE 3 : MES OBJECTIFS & PROGRESSION       -->
+      <!-- ========================================== -->
+      <section v-if="activeView === 'objectifs'">
+        <div class="page-header">
+          <div>
+            <h1 class="header-title"><i class="fa-solid fa-bullseye" style="color: var(--accent-cyan);"></i> Suivi des Objectifs</h1>
+            <p class="header-subtitle">Fixez-vous des cibles de répétitions et suivez votre progression en temps réel.</p>
+          </div>
+          <button class="btn btn-primary" @click="isNewObjModalOpen = true">
+            <i class="fa-solid fa-plus"></i> Définir un objectif
+          </button>
+        </div>
+
+        <div v-if="objectifs.length === 0" class="card" style="text-align: center; padding: 3rem;">
+          <i class="fa-solid fa-mountain" style="font-size: 3rem; color: var(--text-muted); margin-bottom: 1rem;"></i>
+          <h3>Aucun objectif défini</h3>
+          <p style="color: var(--text-secondary); margin-top: 0.4rem;">Fixez-vous un objectif de répétitions dès maintenant pour booster votre motivation !</p>
+          <button class="btn btn-primary" style="margin-top: 1.2rem;" @click="isNewObjModalOpen = true">Créer mon premier objectif</button>
+        </div>
+
+        <div v-else style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.5rem;">
+          <div class="card" v-for="obj in objectifs" :key="obj.id">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+              <span class="user-role-tag">{{ obj.periode }}</span>
+              <span v-if="obj.atteint" style="background: rgba(16, 185, 129, 0.2); color: var(--accent-green); padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700;">
+                <i class="fa-solid fa-circle-check"></i> Objectif Atteint !
+              </span>
+              <span v-else style="color: var(--text-muted); font-size: 0.8rem;">
+                Échéance : {{ obj.date_limite || 'En cours' }}
+              </span>
+            </div>
+
+            <h3 style="font-size: 1.4rem; font-weight: 800;">{{ obj.exercice_nom }}</h3>
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 0.8rem 0 0.4rem 0;">
+              <span style="font-size: 1.8rem; font-weight: 900; color: var(--accent-cyan);">
+                {{ obj.total_actuel }} <span style="font-size: 1rem; color: var(--text-muted); font-weight: 500;">/ {{ obj.repetitions_cible }} reps</span>
+              </span>
+              <span style="font-weight: 800; color: var(--accent-teal);">{{ obj.progression_pourcentage }}%</span>
+            </div>
+
+            <div class="gauge-progress-container" style="height: 10px; margin-bottom: 0.5rem;">
+              <div class="gauge-bar" :style="{ width: `${obj.progression_pourcentage}%` }"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VUE 4 : HISTORIQUE DES SÉANCES            -->
+      <!-- ========================================== -->
+      <section v-if="activeView === 'historique'">
+        <div class="page-header">
+          <div>
+            <h1 class="header-title"><i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-cyan);"></i> Historique des Séances</h1>
+            <p class="header-subtitle">Retrouvez l'historique de vos entraînements et vos statistiques détaillées.</p>
+          </div>
+        </div>
+
+        <div class="card table-responsive">
+          <table class="styled-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Exercice</th>
+                <th>Groupe</th>
+                <th>Durée</th>
+                <th>Répétitions</th>
+                <th>Calories</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="historiqueSeances.length === 0">
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                  Aucune séance enregistrée. Démarrez un entraînement pour voir apparaître vos statistiques !
+                </td>
+              </tr>
+              <tr v-for="s in historiqueSeances" :key="s.id">
+                <td>{{ new Date(s.date_debut).toLocaleDateString() }} {{ new Date(s.date_debut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</td>
+                <td><b style="color: var(--text-primary);">{{ s.exercice_nom }}</b></td>
+                <td>{{ s.groupe_musculaire }}</td>
+                <td>{{ formatChrono(s.duree_secondes) }}</td>
+                <td><span style="color: var(--accent-cyan); font-weight: 800;">{{ s.total_repetitions }}</span></td>
+                <td>{{ s.calories_estimees }} kcal</td>
+                <td>
+                  <button class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" @click="voirDetailSeance(s.id)">
+                    <i class="fa-solid fa-eye"></i> Détails
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VUE 5 : ESPACE ADMINISTRATEUR             -->
+      <!-- ========================================== -->
+      <section v-if="activeView === 'admin'">
+        <div class="page-header">
+          <div>
+            <h1 class="header-title"><i class="fa-solid fa-shield-halved" style="color: var(--accent-cyan);"></i> Espace Administration</h1>
+            <p class="header-subtitle">Gestion globale du catalogue, règles de comptage, utilisateurs et métriques de la plateforme.</p>
+          </div>
+        </div>
+
+        <!-- Cartes Statistiques Globales -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+          <div class="card" style="text-align: center;">
+            <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Utilisateurs</span>
+            <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-cyan); margin: 0.3rem 0;">{{ adminStats.total_utilisateurs || 0 }}</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">dont {{ adminStats.total_sportifs || 0 }} sportifs actifs</div>
+          </div>
+          <div class="card" style="text-align: center;">
+            <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Séances Réalisées</span>
+            <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-teal); margin: 0.3rem 0;">{{ adminStats.total_seances || 0 }}</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">{{ adminStats.duree_totale_minutes || 0 }} minutes cumulées</div>
+          </div>
+          <div class="card" style="text-align: center;">
+            <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Total Répétitions</span>
+            <div style="font-size: 2.2rem; font-weight: 900; color: white; margin: 0.3rem 0;">{{ adminStats.total_repetitions || 0 }}</div>
+            <div style="font-size: 0.8rem; color: var(--accent-green);">Validées par IA</div>
+          </div>
+          <div class="card" style="text-align: center;">
+            <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Taux Objectifs</span>
+            <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-amber); margin: 0.3rem 0;">{{ adminStats.taux_reussite_objectifs || 0 }}%</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">{{ adminStats.objectifs_atteints || 0 }} réussis</div>
+          </div>
+        </div>
+
+        <!-- Table des Utilisateurs -->
+        <div class="card" style="margin-bottom: 2rem;">
+          <h3 style="font-size: 1.15rem; font-weight: 800; margin-bottom: 1rem;"><i class="fa-solid fa-users"></i> Comptes Utilisateurs Enregistrés</h3>
+          <div class="table-responsive">
+            <table class="styled-table">
+              <thead>
+                <tr>
+                  <th>Nom & Prénom</th>
+                  <th>Email</th>
+                  <th>Rôle</th>
+                  <th>Niveau</th>
+                  <th>Séances</th>
+                  <th>Total Reps</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in adminUsers" :key="u.id">
+                  <td><b>{{ u.prenom }} {{ u.nom }}</b></td>
+                  <td>{{ u.email }}</td>
+                  <td><span class="user-role-tag">{{ u.role }}</span></td>
+                  <td>{{ u.niveau }}</td>
+                  <td>{{ u.nb_seances }}</td>
+                  <td>{{ u.total_reps }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ======================================================== -->
+    <!-- MODALES DIALOGUES (Authentification, Profil, Formulaires)-->
+    <!-- ======================================================== -->
+
+    <!-- Modale Authentification (Visiteur -> Sportif) -->
+    <div class="modal-backdrop" v-if="isAuthModalOpen">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 style="font-size: 1.25rem; font-weight: 800;">
+            {{ authForm.mode === 'login' ? 'Connexion à votre compte' : 'Créer un compte Sportif' }}
+          </h3>
+          <button class="icon-btn" @click="isAuthModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1.2rem;">
+            <button class="btn" :class="authForm.mode === 'login' ? 'btn-primary' : 'btn-secondary'" style="flex: 1;" @click="authForm.mode = 'login'">Se connecter</button>
+            <button class="btn" :class="authForm.mode === 'register' ? 'btn-primary' : 'btn-secondary'" style="flex: 1;" @click="authForm.mode = 'register'">S'inscrire</button>
+          </div>
+
+          <div v-if="authForm.mode === 'register'" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
+            <div class="form-group">
+              <label class="form-label">Nom</label>
+              <input class="form-input" v-model="authForm.nom" placeholder="Ex: Dupont">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Prénom</label>
+              <input class="form-input" v-model="authForm.prenom" placeholder="Ex: Jean">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Adresse Email</label>
+            <input class="form-input" type="email" v-model="authForm.email" placeholder="nom@exemple.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mot de passe</label>
+            <input class="form-input" type="password" v-model="authForm.mot_de_passe" placeholder="••••••••">
+          </div>
+
+          <div v-if="authForm.mode === 'register'" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8rem;">
+            <div class="form-group">
+              <label class="form-label">Poids (kg)</label>
+              <input class="form-input" type="number" v-model="authForm.poids">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Taille (cm)</label>
+              <input class="form-input" type="number" v-model="authForm.taille">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Niveau</label>
+              <select class="form-select" v-model="authForm.niveau">
+                <option value="Débutant">Débutant</option>
+                <option value="Intermédiaire">Intermédiaire</option>
+                <option value="Avancé">Avancé</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="isAuthModalOpen = false">Annuler</button>
+          <button class="btn btn-primary" @click="handleAuth">
+            {{ authForm.mode === 'login' ? 'Connexion' : 'Valider mon inscription' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modale Nouvel Objectif (Sportif) -->
+    <div class="modal-backdrop" v-if="isNewObjModalOpen">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 style="font-size: 1.25rem; font-weight: 800;"><i class="fa-solid fa-bullseye" style="color: var(--accent-cyan);"></i> Définir un Nouvel Objectif</h3>
+          <button class="icon-btn" @click="isNewObjModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Mouvement / Exercice</label>
+            <select class="form-select" v-model="nouvelObjectif.exercice_id">
+              <option v-for="exo in catalogue" :key="exo.id" :value="exo.id">{{ exo.nom }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Répétitions Cibles</label>
+            <input class="form-input" type="number" v-model="nouvelObjectif.repetitions_cible" min="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Période</label>
+            <select class="form-select" v-model="nouvelObjectif.periode">
+              <option value="quotidien">Quotidien (Aujourd'hui)</option>
+              <option value="hebdomadaire">Hebdomadaire (Cette semaine)</option>
+              <option value="mensuel">Mensuel (Ce mois-ci)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="isNewObjModalOpen = false">Annuler</button>
+          <button class="btn btn-primary" @click="handleCreerObjectif">Enregistrer l'objectif</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modale Ajout / Modification Exercice & Règle de Comptage (Admin) -->
+    <div class="modal-backdrop" v-if="isNewExoModalOpen">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 style="font-size: 1.25rem; font-weight: 800;">
+            {{ nouvelExercice.id ? 'Paramétrer la règle de comptage' : 'Ajouter un exercice au catalogue' }}
+          </h3>
+          <button class="icon-btn" @click="isNewExoModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Nom de l'exercice</label>
+            <input class="form-input" v-model="nouvelExercice.nom" placeholder="Ex: Fentes avant">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description et consignes de posture</label>
+            <textarea class="form-textarea" rows="2" v-model="nouvelExercice.description"></textarea>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
+            <div class="form-group">
+              <label class="form-label">Groupe Musculaire</label>
+              <input class="form-input" v-model="nouvelExercice.groupe_musculaire" placeholder="Ex: Cuisses & Fessiers">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Difficulté (1 à 3)</label>
+              <select class="form-select" v-model="nouvelExercice.difficulte">
+                <option :value="1">1 - Débutant</option>
+                <option :value="2">2 - Intermédiaire</option>
+                <option :value="3">3 - Avancé</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="background: var(--bg-primary); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 1rem;">
+            <h4 style="font-size: 0.85rem; font-weight: 800; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 0.8rem;">
+              <i class="fa-solid fa-sliders"></i> Paramètres de la Règle de Comptage (RegleDeComptage)
+            </h4>
+            <div class="form-group">
+              <label class="form-label">Articulation Suivie</label>
+              <select class="form-select" v-model="nouvelExercice.regle.articulation_cle">
+                <option value="genou">Genou (Squats, Fentes)</option>
+                <option value="coude">Coude (Pompes, Curls, Tractions)</option>
+                <option value="distance_poignets">Distance Poignets (Écarté / Chest Fly)</option>
+                <option value="hanche">Hanche (Relevé de bassin)</option>
+              </select>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.6rem;">
+              <div class="form-group">
+                <label class="form-label">Seuil Haut (°)</label>
+                <input class="form-input" type="number" v-model="nouvelExercice.regle.angle_haut">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Seuil Bas (°)</label>
+                <input class="form-input" type="number" v-model="nouvelExercice.regle.angle_bas">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Tolérance (°)</label>
+                <input class="form-input" type="number" v-model="nouvelExercice.regle.tolerance">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Durée Minimale par Répétition (ms)</label>
+              <input class="form-input" type="number" v-model="nouvelExercice.regle.duree_min_repetition" step="50">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="isNewExoModalOpen = false">Annuler</button>
+          <button class="btn btn-primary" @click="handleCreerOuModifierExercice">Enregistrer les paramètres</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modale Détail Séance (Historique) -->
+    <div class="modal-backdrop" v-if="isDetailModalOpen && detailSeance">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 style="font-size: 1.25rem; font-weight: 800;">Détail de la Séance #{{ detailSeance.id }}</h3>
+          <button class="icon-btn" @click="isDetailModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem;">
+            <div>
+              <h4 style="font-size: 1.3rem; font-weight: 800; color: var(--accent-cyan);">{{ detailSeance.exercice_nom }}</h4>
+              <span style="font-size: 0.85rem; color: var(--text-muted);">{{ new Date(detailSeance.date_debut).toLocaleString() }}</span>
+            </div>
+            <div style="font-size: 1.8rem; font-weight: 900; color: white;">{{ detailSeance.total_repetitions }} reps</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.2rem;">
+            <div class="metric-box">
+              <div class="metric-val">{{ formatChrono(detailSeance.duree_secondes) }}</div>
+              <div class="metric-title">Durée de travail</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val" style="color: var(--accent-rose);">{{ detailSeance.calories_estimees }} kcal</div>
+              <div class="metric-title">Dépense énergétique</div>
+            </div>
+          </div>
+
+          <h5 style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.4rem;">Répétitions validées</h5>
+          <div style="max-height: 180px; overflow-y: auto; background: var(--bg-primary); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <table class="styled-table">
+              <thead>
+                <tr><th>#</th><th>Durée</th><th>Amplitude</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in detailSeance.repetitions" :key="r.id">
+                  <td>Répétition {{ r.numero }}</td>
+                  <td>{{ (r.duree_ms / 1000).toFixed(2) }} s</td>
+                  <td>{{ r.amplitude }}°</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="isDetailModalOpen = false">Fermer</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
