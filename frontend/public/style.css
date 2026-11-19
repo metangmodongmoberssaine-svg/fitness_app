@@ -1403,3 +1403,19 @@ main.container > section { animation: viewIn .5s cubic-bezier(.2,.7,.2,1) both; 
 /* Barre de navigation : 5 onglets sur une seule ligne */
 .nav-item { white-space: nowrap; padding: .55rem .95rem; font-size: .86rem; }
 .navbar .brand, .navbar .logo, .navbar-brand { white-space: nowrap; }
+
+
+/* Bandeau d'état caméra / moteur d'analyse */
+.sys-banner { position: absolute; left: 1rem; right: 1rem; top: 1rem; z-index: 80; display: flex; gap: .9rem;
+  align-items: flex-start; padding: .9rem 1.1rem; border-radius: 18px; backdrop-filter: blur(14px); pointer-events: auto;
+  background: rgba(13,13,16,.82); border: 1px solid var(--line); animation: popIn .35s ease both; }
+.sys-banner > i { font-size: 1.3rem; margin-top: .15rem; }
+.sys-banner.erreur { border-color: rgba(255,107,107,.5); } .sys-banner.erreur > i { color: #ff6b6b; }
+.sys-banner.info > i { color: var(--lime); }
+.sys-banner-text { display: flex; flex-direction: column; gap: .35rem; font-size: .85rem; color: var(--text-secondary); line-height: 1.5; }
+.sys-banner-text b { color: var(--text-primary); font-size: .95rem; }
+.sys-banner-text .btn { align-self: flex-start; margin-top: .3rem; }
+.sys-hint { display: block; color: #ffb84d; font-size: .8rem; margin-top: .3rem; }
+
+.sys-banner.conseil { top: auto; bottom: 1rem; border-color: rgba(255,184,77,.5); }
+.sys-banner.conseil > i { color: #ffb84d; }

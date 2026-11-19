@@ -57,6 +57,31 @@ const app = createApp({
     const sampleVideos = ref([]);
     const selectedSampleFile = ref("");
 
+    // Message affiché à l'écran quand la caméra ou le moteur d'analyse pose problème (remplace les alert())
+    const avisSysteme = ref(null);   // { niveau: 'info'|'erreur', titre, details, action }
+    const setAvis = (niveau, titre, details = "", action = false) => { avisSysteme.value = { niveau, titre, details, action }; };
+    const effacerAvis = () => { avisSysteme.value = null; };
+    let moteurARepondu = false;
+    let veilleMoteur = null;
+    let avisLenteurAffiche = false;
+
+    // La vidéo de test doit correspondre à l'exercice choisi (sinon on analyse les genoux sur une vidéo de pompes…)
+    const exoDeVideo = (s) => catalogue.value.find(e => e.video_sample === s.url);
+    const alignerVideoTest = () => {
+      const exo = selectedExercice.value;
+      if (!exo || !exo.video_sample) return;
+      const m = sampleVideos.value.find(s => s.url === exo.video_sample);
+      if (m) selectedSampleFile.value = m.url;
+    };
+    const avertissementVideoTest = computed(() => {
+      const exo = selectedExercice.value;
+      if (selectedVideoSource.value !== "sample" || !exo) return "";
+      if (!exo.video_sample) return "Aucune vidéo de test n'existe pour cet exercice : utilisez la caméra.";
+      if (selectedSampleFile.value !== exo.video_sample)
+        return "Cette vidéo ne correspond pas à l'exercice choisi : le décompte ne fonctionnera pas.";
+      return "";
+    });
+
     // État Séance d'entraînement en direct
     const sessionState = reactive({
       statut: "non_demarre", // 'non_demarre', 'en_cours', 'en_pause', 'terminee'
@@ -121,6 +146,8 @@ const app = createApp({
 
     // Variables machine à états comptage local
     let minAngleObserved = 999;
+    let descenteEnCours = false;
+    let minDescente = 999;
     let maxAngleObserved = 0;
     let repStartTime = 0;
     let lastCorrectionTime = 0;
@@ -253,12 +280,14 @@ const app = createApp({
 
     // --- CALCULS GÉOMÉTRIQUES & VISION (LOCAL EMBARQUÉ) ---
     // Formule : θ = arccos[(BA · BC) / (|BA| × |BC|)]
-    const calculateAngle = (ptA, ptB, ptC) => {
+    const calculateAngle = (ptA, ptB, ptC, w = 1, h = 1) => {
       if (!ptA || !ptB || !ptC) return 180;
-      const ba_x = ptA.x - ptB.x;
-      const ba_y = ptA.y - ptB.y;
-      const bc_x = ptC.x - ptB.x;
-      const bc_y = ptC.y - ptB.y;
+      // Les coordonnées MediaPipe sont normalisées (0..1) : on repasse en pixels,
+      // sinon l'angle est faussé sur une image 16:9 (jusqu'à ~16°).
+      const ba_x = (ptA.x - ptB.x) * w;
+      const ba_y = (ptA.y - ptB.y) * h;
+      const bc_x = (ptC.x - ptB.x) * w;
+      const bc_y = (ptC.y - ptB.y) * h;
 
       const dotProduct = ba_x * bc_x + ba_y * bc_y;
       const normBA = Math.sqrt(ba_x * ba_x + ba_y * ba_y);
@@ -270,14 +299,29 @@ const app = createApp({
       return (Math.acos(cosTheta) * 180) / Math.PI;
     };
 
+    // Un côté du corps n'est utilisé que si ses 3 points sont réellement visibles
+    const VISIBILITE_MIN = 0.5;
+    const angleCote = (a, b, c, w, h) => {
+      if (!a || !b || !c) return null;
+      if ((a.visibility ?? 1) < VISIBILITE_MIN || (b.visibility ?? 1) < VISIBILITE_MIN || (c.visibility ?? 1) < VISIBILITE_MIN) return null;
+      return calculateAngle(a, b, c, w, h);
+    };
+    const moyenneAngles = (g, d) => {
+      const v = [g, d].filter(x => x !== null);
+      return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
+    };
+
     // Initialisation MediaPipe Pose
     const initPoseDetector = () => {
       if (typeof Pose === "undefined") {
-        console.warn("MediaPipe Pose CDN non chargé, basculement en mode simulation/test vidéo.");
+        console.warn("MediaPipe Pose non chargé.");
+        setAvis("erreur", "Le moteur d'analyse (MediaPipe) n'est pas chargé",
+          "Vérifiez votre connexion internet, ou installez-le en local avec « python telecharger_mediapipe.py », puis rechargez la page (Ctrl + F5).");
         return null;
       }
+      const baseMp = window.MP_POSE_BASE || "https://cdn.jsdelivr.net/npm/@mediapipe/pose/";
       const pose = new Pose({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        locateFile: (file) => `${baseMp}${file}`
       });
       pose.setOptions({
         modelComplexity: 1,
@@ -292,8 +336,44 @@ const app = createApp({
     };
 
     // Callback de traitement trame par trame (Figure 5 - Phase 2)
+    // Aide en direct : si la personne est détectée mais que le mouvement n'atteint jamais les seuils de la règle,
+    // on explique pourquoi la répétition n'est pas comptée (angle de caméra, amplitude, etc.)
+    let fenetreAngles = [];
+    let dernierConseil = 0;
+    const suivreAmplitude = (v, regle) => {
+      const t = Date.now();
+      fenetreAngles.push({ t, v });
+      while (fenetreAngles.length && t - fenetreAngles[0].t > 12000) fenetreAngles.shift();
+      if (t - dernierConseil < 1000) return;
+      dernierConseil = t;
+      if (fenetreAngles[fenetreAngles.length - 1].t - fenetreAngles[0].t < 9000) return;   // pas assez de recul
+      const valeurs = fenetreAngles.map(x => x.v);
+      const mn = Math.round(Math.min(...valeurs)), mx = Math.round(Math.max(...valeurs));
+      const haut = regle.angle_haut - regle.tolerance, bas = regle.angle_bas + regle.tolerance;
+      if (!(regle.angle_haut > regle.angle_bas)) return;                // règles inversées : pas de conseil
+      const atteintHaut = mx >= haut, atteintBas = mn <= bas;
+      if (atteintHaut && atteintBas) { if (avisSysteme.value && avisSysteme.value.niveau === "conseil") effacerAvis(); return; }
+      if (avisSysteme.value && avisSysteme.value.niveau === "erreur") return;
+      if (!atteintBas && mx - mn < 25) {
+        setAvis("conseil", "Mouvement trop faible pour être compté",
+          `Angle mesuré : ${mn}° à ${mx}° seulement. Il faut aller d'environ ${Math.round(haut)}° (articulation tendue) à ${Math.round(bas)}° (fléchie). Placez-vous de profil (squat, pompes) ou assurez-vous que l'articulation suivie est bien visible.`);
+      } else if (!atteintBas) {
+        setAvis("conseil", "Descendez plus bas",
+          `Angle minimum atteint : ${mn}° ; il faut descendre à ${Math.round(bas)}° ou moins pour valider une répétition.`);
+      } else if (!atteintHaut) {
+        setAvis("conseil", "Tendez complètement l'articulation",
+          `Angle maximum atteint : ${mx}° ; il faut remonter à ${Math.round(haut)}° ou plus pour terminer la répétition.`);
+      }
+    };
+
     const onPoseResults = (results) => {
       if (sessionState.statut !== "en_cours") return;
+
+      if (!moteurARepondu) {                       // premier résultat : le moteur fonctionne
+        moteurARepondu = true;
+        clearTimeout(veilleMoteur);
+        if (avisSysteme.value && avisSysteme.value.niveau === "info") effacerAvis();
+      }
 
       // Calcul FPS
       fpsFrames++;
@@ -302,6 +382,15 @@ const app = createApp({
         sessionState.fps = fpsFrames;
         fpsFrames = 0;
         lastFpsTime = now;
+        const video = videoElement.value;
+        if (video && selectedVideoSource.value !== "webcam") {
+          // Ordinateur lent : on ralentit la vidéo pour que chaque phase du mouvement soit analysée
+          video.playbackRate = Math.max(0.25, Math.min(1, sessionState.fps / 24));
+        } else if (sessionState.fps > 0 && sessionState.fps < 8 && !avisLenteurAffiche) {
+          avisLenteurAffiche = true;
+          setAvis("info", `Analyse lente (${sessionState.fps} images/s)`,
+            "Fermez les autres onglets et activez l'accélération matérielle du navigateur (Paramètres > Système). Bougez plus lentement si des répétitions sont manquées.");
+        }
       }
 
       const canvas = canvasElement.value;
@@ -345,16 +434,16 @@ const app = createApp({
 
       if (art.includes("genou")) {
         // Squats : hanche(23/24) - genou(25/26) - cheville(27/28)
-        const angleG = calculateAngle(lm[23], lm[25], lm[27]);
-        const angleD = calculateAngle(lm[24], lm[26], lm[28]);
-        currentAngle = (angleG + angleD) / 2;
+        const angleG = angleCote(lm[23], lm[25], lm[27], canvas.width, canvas.height);
+        const angleD = angleCote(lm[24], lm[26], lm[28], canvas.width, canvas.height);
+        currentAngle = moyenneAngles(angleG, angleD);
         highlightJoint(ctx, lm[25], canvas.width, canvas.height, currentAngle);
         highlightJoint(ctx, lm[26], canvas.width, canvas.height, currentAngle);
       } else if (art.includes("coude") || art.includes("pompe") || art.includes("biceps")) {
         // Pompes / Curls / Tractions : épaule(11/12) - coude(13/14) - poignet(15/16)
-        const angleG = calculateAngle(lm[11], lm[13], lm[15]);
-        const angleD = calculateAngle(lm[12], lm[14], lm[16]);
-        currentAngle = (angleG + angleD) / 2;
+        const angleG = angleCote(lm[11], lm[13], lm[15], canvas.width, canvas.height);
+        const angleD = angleCote(lm[12], lm[14], lm[16], canvas.width, canvas.height);
+        currentAngle = moyenneAngles(angleG, angleD);
         highlightJoint(ctx, lm[13], canvas.width, canvas.height, currentAngle);
         highlightJoint(ctx, lm[14], canvas.width, canvas.height, currentAngle);
       } else if (art.includes("distance") || art.includes("chest")) {
@@ -363,10 +452,16 @@ const app = createApp({
         currentAngle = dist;
       }
 
+      if (currentAngle === null) {          // articulations hors cadre ou masquées
+        sessionState.personneDetectee = false;
+        ctx.restore();
+        return;
+      }
       sessionState.angleCourant = Math.round(currentAngle);
 
       // Traitement dans la machine à états de comptage (CompteurRepetitions)
       traiterDecompteLocal(currentAngle, regle);
+      suivreAmplitude(currentAngle, regle);
 
       ctx.restore();
     };
@@ -401,13 +496,24 @@ const app = createApp({
 
       // Détection des erreurs de posture (Contrôle posture Figure 5 & 7)
       if (aHaut > aBas) {
-        if (sessionState.phaseCourante === "basse" && valeur > (aBas + tol * 2.2)) {
-          const msg = "Descendez plus bas pour une répétition complète !";
-          emettreCorrection(msg, 1);
-        } else if (valeur < (aBas - 25)) {
-          const msg = "Attention à l'hyperflexion, ne descendez pas trop bas !";
-          emettreCorrection(msg, 2);
+        // Descente amorcée puis abandonnée avant le seuil bas = répétition incomplète
+        if (sessionState.phaseCourante === "haute") {
+          if (valeur < aHaut - tol * 1.5) {
+            descenteEnCours = true;
+            if (valeur < minDescente) minDescente = valeur;
+          } else if (valeur >= aHaut - tol && descenteEnCours) {
+            if (minDescente > aBas + tol * 2.2) {
+              emettreCorrection("Descendez plus bas pour une répétition complète !", 1);
+            }
+            descenteEnCours = false;
+            minDescente = 999;
+          }
+        } else {
+          descenteEnCours = false;
+          minDescente = 999;
         }
+        // (Alerte « hyperflexion » retirée : descendre plus bas que la cible n'est pas une erreur,
+        //  et pour l'écarté la distance poignets proche de 0 est le mouvement normal.)
       }
 
       // Logique Hystérésis
@@ -453,6 +559,8 @@ const app = createApp({
 
     const validerRepetition = (dureeMs, amplitude) => {
       sessionState.totalRepetitions++;
+      if (avisSysteme.value && avisSysteme.value.niveau === "conseil") effacerAvis();
+      fenetreAngles = [];
       playRepChime();
 
       // Effet visuel
@@ -528,6 +636,7 @@ const app = createApp({
       maxAngleObserved = 0;
 
       // Démarre le chronomètre
+      clearInterval(timerInterval);
       timerInterval = setInterval(() => {
         if (sessionState.statut === "en_cours") {
           sessionState.dureeSecondes++;
@@ -537,21 +646,63 @@ const app = createApp({
       await demarrerFluxVideo();
     };
 
+    // Traduit l'erreur du navigateur en explication compréhensible
+    const expliquerErreurCamera = (err) => {
+      const n = err && err.name ? err.name : "";
+      if (!window.isSecureContext)
+        return ["Page non sécurisée", "Ouvrez l'application via http://localhost:8000 (pas via une adresse IP ni un fichier) : sinon le navigateur bloque la caméra."];
+      if (n === "NotAllowedError" || n === "SecurityError" || n === "PermissionDeniedError")
+        return ["Accès à la caméra refusé", "Cliquez sur le cadenas à gauche de l'adresse > Caméra > Autoriser, puis rechargez la page. Sous Windows : Paramètres > Confidentialité et sécurité > Caméra > autoriser les applications de bureau."];
+      if (n === "NotFoundError" || n === "DevicesNotFoundError" || n === "OverconstrainedError")
+        return ["Aucune caméra détectée", "Vérifiez qu'une caméra est branchée et activée (Gestionnaire de périphériques), puis réessayez."];
+      if (n === "NotReadableError" || n === "TrackStartError" || n === "AbortError")
+        return ["Caméra déjà utilisée par un autre programme", "Fermez Teams, Zoom, Skype ou tout autre onglet qui utilise la caméra, puis réessayez."];
+      return ["Caméra indisponible", "Détail technique : " + (n || err)];
+    };
+
     const demarrerFluxVideo = async () => {
       const video = videoElement.value;
       if (!video) return;
 
+      effacerAvis();
+      fenetreAngles = [];
+      moteurARepondu = false;
+      avisLenteurAffiche = false;
+      clearTimeout(veilleMoteur);
+
+      if (window.mediapipePret) { try { await window.mediapipePret; } catch (e) {} }
       poseDetector = initPoseDetector();
+      if (!poseDetector) { sessionState.statut = "non_demarre"; return; }   // avis déjà affiché
+
+      setAvis("info", "Chargement du moteur d'analyse…", "Première utilisation : cela peut prendre quelques secondes.");
+      try {
+        await poseDetector.initialize();
+      } catch (e) {
+        setAvis("erreur", "Le moteur d'analyse n'a pas pu démarrer",
+          "Détail : " + (e && e.message ? e.message : e) + ". Vérifiez la connexion internet ou installez MediaPipe en local (python telecharger_mediapipe.py).");
+        sessionState.statut = "non_demarre";
+        return;
+      }
+      // Si aucun résultat au bout de 20 s, on prévient au lieu de rester muet
+      veilleMoteur = setTimeout(() => {
+        if (!moteurARepondu && sessionState.statut === "en_cours") {
+          setAvis("erreur", "Le moteur d'analyse ne répond pas",
+            "Rechargez la page (Ctrl + F5). Si le problème persiste, activez l'accélération matérielle du navigateur ou essayez Chrome.");
+        }
+      }, 20000);
 
       if (selectedVideoSource.value === "webcam") {
         try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw Object.assign(new Error("mediaDevices indisponible"), { name: "SecurityError" });
+          }
           const stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 1280, height: 720, facingMode: "user" }
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }
           });
           video.srcObject = stream;
-          video.play();
+          video.play().catch(() => {});
 
-          if (typeof Camera !== "undefined" && poseDetector) {
+          if (typeof Camera !== "undefined") {
             cameraInstance = new Camera(video, {
               onFrame: async () => {
                 if (sessionState.statut === "en_cours") {
@@ -575,16 +726,19 @@ const app = createApp({
             requestAnimationFrame(loop);
           }
         } catch (err) {
-          alert("Accès caméra refusé ou non disponible. Veuillez autoriser la caméra ou sélectionner une vidéo d'exemple.");
+          console.error("Erreur caméra:", err);
+          const [titre, details] = expliquerErreurCamera(err);
+          setAvis("erreur", titre, details, true);
           sessionState.statut = "non_demarre";
+          clearInterval(timerInterval);
         }
       } else {
-        // Mode Échantillon vidéo pré-enregistrée
+        // Mode vidéo de test (échantillons du projet)
         video.srcObject = null;
         video.src = selectedSampleFile.value || (selectedExercice.value?.video_sample || "/samples/squat.mp4");
         video.loop = true;
         video.muted = true;
-        video.play();
+        video.playbackRate = 1;
 
         const processVideoFrame = async () => {
           if (sessionState.statut === "en_cours" && poseDetector && !video.paused && !video.ended) {
@@ -595,9 +749,19 @@ const app = createApp({
           }
         };
         video.onloadeddata = () => {
+          video.play().catch(() => {});
           requestAnimationFrame(processVideoFrame);
         };
+        video.play().catch(() => {});
       }
+    };
+
+    // Bouton du bandeau d'erreur : repasser sur une vidéo de test si la caméra est inaccessible
+    const basculerSurVideoTest = async () => {
+      effacerAvis();
+      selectedVideoSource.value = "sample";
+      alignerVideoTest();
+      await lancerSeance();
     };
 
     const mettreEnPause = () => {
@@ -617,6 +781,8 @@ const app = createApp({
     const terminerSeance = async () => {
       sessionState.statut = "terminee";
       clearInterval(timerInterval);
+      clearTimeout(veilleMoteur);
+      effacerAvis();
 
       // Couper flux caméra (Figure 6, msg 7-8)
       if (videoElement.value && videoElement.value.srcObject) {
@@ -1062,6 +1228,8 @@ const app = createApp({
       if (exo) choisirExercice(exo);
     };
 
+    watch([selectedExercice, sampleVideos], alignerVideoTest);
+
     onMounted(() => {
       loadVideos();
       loadCatalogue();
@@ -1076,6 +1244,7 @@ const app = createApp({
     });
 
     return {
+      avisSysteme, basculerSurVideoTest, avertissementVideoTest, exoDeVideo,
       videos, isVideoModalOpen, videoExo, videoForm, videoMessage, videoEnvoi, champVideo,
       videosDe, videoPour, playPreview, stopPreview, ouvrirVideosAdmin, onFichierVideo, envoyerVideo, supprimerVideo,
       calMois, nomMois, joursSemaine, joursCalendrier, jourSelectionne, statsMois, detailJour, libelleJour,

@@ -479,7 +479,7 @@ def seed_initial_data(db: DatabaseConnection):
                 "Bras & Biceps",
                 1,
                 "/samples/dumbbell workout.mp4",
-                ("coude", 160.0, 65.0, 10.0, 600)
+                ("coude", 160.0, 100.0, 12.0, 600)
             ),
             (
                 "Chest Fly Machine",

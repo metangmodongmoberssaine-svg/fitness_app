@@ -13,10 +13,31 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <!-- Vue 3 -->
   <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
-  <!-- MediaPipe Pose & Camera Utils -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <!-- MediaPipe Pose : copie locale (vendor/) si elle existe, sinon CDN -->
+  <script>
+    (function () {
+      var LOCAL = '/vendor/mediapipe/', CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/';
+      window.MP_POSE_BASE = CDN + 'pose/';
+      function load(src) {
+        return new Promise(function (ok, ko) {
+          var s = document.createElement('script');
+          s.src = src; s.crossOrigin = 'anonymous';
+          s.onload = ok; s.onerror = function () { s.remove(); ko(); };
+          document.head.appendChild(s);
+        });
+      }
+      function chargerDepuis(base, local) {
+        return load(base + 'pose/pose.js').then(function () {
+          if (local) window.MP_POSE_BASE = base + 'pose/';
+          return Promise.all([
+            load(base + 'camera_utils/camera_utils.js').catch(function () {}),
+            load(base + 'drawing_utils/drawing_utils.js').catch(function () {})
+          ]);
+        });
+      }
+      window.mediapipePret = chargerDepuis(LOCAL, true).catch(function () { return chargerDepuis(CDN, false); }).catch(function () {});
+    })();
+  </script>
 </head>
 <body>
   <div id="app">
@@ -139,9 +160,10 @@
 
             <select v-if="selectedVideoSource === 'sample'" class="form-select" v-model="selectedSampleFile" style="background: var(--bg-secondary);">
               <option v-for="s in sampleVideos" :key="s.filename" :value="s.url">
-                {{ s.filename }}
+                {{ s.filename }}{{ exoDeVideo(s) ? ' — ' + exoDeVideo(s).nom : '' }}
               </option>
             </select>
+            <span class="sys-hint" v-if="avertissementVideoTest"><i class="fa-solid fa-triangle-exclamation"></i> {{ avertissementVideoTest }}</span>
 
             <button class="btn btn-primary" @click="lancerSeance">
               <i class="fa-solid fa-play"></i> Démarrer la séance
@@ -181,6 +203,18 @@
               <div class="posture-feedback-toast" v-if="sessionState.statut === 'en_cours' && sessionState.derniereCorrection">
                 <i class="fa-solid fa-circle-exclamation"></i>
                 <span>{{ sessionState.derniereCorrection.message }}</span>
+              </div>
+
+              <!-- Bandeau d'état : caméra / moteur d'analyse -->
+              <div class="sys-banner" :class="avisSysteme.niveau" v-if="avisSysteme">
+                <i class="fa-solid" :class="avisSysteme.niveau === 'erreur' ? 'fa-triangle-exclamation' : avisSysteme.niveau === 'conseil' ? 'fa-lightbulb' : 'fa-spinner fa-spin'"></i>
+                <div class="sys-banner-text">
+                  <b>{{ avisSysteme.titre }}</b>
+                  <span v-if="avisSysteme.details">{{ avisSysteme.details }}</span>
+                  <button class="btn btn-primary btn-pill" v-if="avisSysteme.action" @click="basculerSurVideoTest">
+                    <i class="fa-solid fa-film"></i> Utiliser une vidéo de test à la place
+                  </button>
+                </div>
               </div>
 
               <!-- Écran de Pause (Figure 6 - opt [pause]) -->
