@@ -39,6 +39,9 @@
         <button class="nav-item" :class="{ active: activeView === 'catalogue' }" @click="activeView = 'catalogue'">
           <i class="fa-solid fa-list-check"></i> Catalogue
         </button>
+        <button class="nav-item" :class="{ active: activeView === 'calendrier' }" @click="activeView = 'calendrier'" v-if="currentUser.role !== 'visiteur'">
+          <i class="fa-solid fa-calendar-days"></i> Calendrier
+        </button>
         <button class="nav-item" :class="{ active: activeView === 'objectifs' }" @click="activeView = 'objectifs'" v-if="currentUser.role !== 'visiteur'">
           <i class="fa-solid fa-bullseye"></i> Mes Objectifs
         </button>
@@ -192,7 +195,12 @@
 
               <!-- Écran de Bienvenue / Pré-démarrage -->
               <div class="pause-overlay" v-if="sessionState.statut === 'non_demarre'">
-                <i class="fa-solid fa-camera-rotate" style="font-size: 3rem; color: var(--accent-teal); margin-bottom: 0.5rem;"></i>
+                <div class="demo-box" v-if="selectedExercice && videoPour(selectedExercice)">
+                  <video class="demo-video" :key="videoPour(selectedExercice)" :src="videoPour(selectedExercice)"
+                         autoplay muted loop playsinline controls></video>
+                  <span class="demo-tag"><i class="fa-solid fa-circle-play"></i> Démonstration : {{ selectedExercice.nom }}</span>
+                </div>
+                <i v-else class="fa-solid fa-camera-rotate" style="font-size: 3rem; color: var(--accent-teal); margin-bottom: 0.5rem;"></i>
                 <div style="font-size: 1.3rem; font-weight: 700;">Prêt pour votre entraînement ?</div>
                 <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 450px; text-align: center;">
                   Choisissez un exercice, placez-vous face à la caméra et cliquez sur <b>Démarrer la séance</b>.
@@ -407,7 +415,18 @@
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
-          <div class="card" v-for="exo in catalogue" :key="exo.id" style="display: flex; flex-direction: column; justify-content: space-between;">
+          <div class="card exo-card card-anim" v-for="(exo, i) in catalogue" :key="exo.id" :style="{ '--d': (i * 70) + 'ms' }">
+            <div class="exo-media" @mouseenter="playPreview" @mouseleave="stopPreview" @touchstart.passive="playPreview">
+              <video v-if="videoPour(exo)" :src="videoPour(exo) + '#t=0.8'" muted loop playsinline preload="metadata"></video>
+              <div class="exo-media-empty" v-else>
+                <i class="fa-solid fa-video-slash"></i>
+                <span>Aucune vidéo</span>
+              </div>
+              <span class="exo-media-badge" v-if="videoPour(exo)"><i class="fa-solid fa-circle-play"></i> Survolez pour la démo</span>
+              <button class="exo-media-admin" v-if="currentUser.role === 'administrateur'" @click.stop="ouvrirVideosAdmin(exo)" title="Gérer les vidéos">
+                <i class="fa-solid fa-film"></i> {{ videosDe(exo).length ? 'Vidéos (' + videosDe(exo).length + ')' : 'Ajouter une vidéo' }}
+              </button>
+            </div>
             <div>
               <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem;">
                 <span class="user-role-tag" style="background: rgba(20, 184, 166, 0.15); color: var(--accent-teal);">
@@ -610,6 +629,102 @@
         </div>
       </section>
 
+
+      <!-- ========================================== -->
+      <!-- VUE : CALENDRIER D'ENTRAÎNEMENT           -->
+      <!-- ========================================== -->
+      <section v-if="activeView === 'calendrier'">
+        <div class="page-header">
+          <div>
+            <h1 class="header-title"><i class="fa-solid fa-calendar-days" style="color: var(--accent-cyan);"></i> Calendrier d'entraînement</h1>
+            <p class="header-subtitle">Planifiez vos séances et visualisez celles que vous avez réalisées.</p>
+          </div>
+          <button class="btn btn-secondary" @click="aujourdhui"><i class="fa-solid fa-calendar-day"></i> Aujourd'hui</button>
+        </div>
+
+        <div class="cal-stats">
+          <div class="cal-stat card-anim" style="--d:0ms"><b>{{ statsMois.seances }}</b><span>séances ce mois</span></div>
+          <div class="cal-stat card-anim" style="--d:80ms"><b>{{ statsMois.reps }}</b><span>répétitions</span></div>
+          <div class="cal-stat card-anim" style="--d:160ms"><b>{{ statsMois.jours }}</b><span>jours actifs</span></div>
+          <div class="cal-stat card-anim" style="--d:240ms"><b>{{ statsMois.prevues }}</b><span>séances à venir</span></div>
+        </div>
+
+        <div class="cal-layout">
+          <div class="card cal-card">
+            <div class="cal-head">
+              <button class="icon-btn" @click="moisPrecedent"><i class="fa-solid fa-chevron-left"></i></button>
+              <h2>{{ nomMois }} {{ calMois.annee }}</h2>
+              <button class="icon-btn" @click="moisSuivant"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+            <div class="cal-grid cal-weekdays"><span v-for="j in joursSemaine" :key="j">{{ j }}</span></div>
+            <transition name="cal-swap" mode="out-in">
+              <div class="cal-grid" :key="calMois.annee + '-' + calMois.mois">
+                <template v-for="(c, idx) in joursCalendrier" :key="idx">
+                  <div v-if="!c" class="cal-cell empty"></div>
+                  <button v-else class="cal-cell"
+                          :class="{ today: c.aujourdhui, selected: c.cle === jourSelectionne, done: c.seances > 0 }"
+                          @click="jourSelectionne = c.cle">
+                    <span class="cal-num">{{ c.jour }}</span>
+                    <span class="cal-dots">
+                      <i class="dot dot-done" v-if="c.seances > 0"></i>
+                      <i class="dot dot-plan" v-if="c.prevues > 0"></i>
+                    </span>
+                  </button>
+                </template>
+              </div>
+            </transition>
+            <div class="cal-legend">
+              <span><i class="dot dot-done"></i> Séance réalisée</span>
+              <span><i class="dot dot-plan"></i> Séance planifiée</span>
+            </div>
+          </div>
+
+          <div class="card cal-day">
+            <h3>{{ libelleJour }}</h3>
+
+            <div v-if="detailJour.seances.length" class="cal-block">
+              <div class="cal-block-title">Réalisées</div>
+              <div class="cal-item done" v-for="s in detailJour.seances" :key="'s'+s.id">
+                <i class="fa-solid fa-circle-check"></i>
+                <div><b>{{ s.exercice_nom }}</b><small>{{ s.total_repetitions }} répétitions · {{ s.duree_secondes }} s</small></div>
+              </div>
+            </div>
+
+            <div v-if="detailJour.planifs.length" class="cal-block">
+              <div class="cal-block-title">Planifiées</div>
+              <div class="cal-item plan" v-for="p in detailJour.planifs" :key="'p'+p.id" :class="{ fait: p.statut === 'faite' }">
+                <button class="cal-check" @click="basculerPlanif(p)" :title="p.statut === 'faite' ? 'Marquer comme à faire' : 'Marquer comme faite'">
+                  <i :class="p.statut === 'faite' ? 'fa-solid fa-square-check' : 'fa-regular fa-square'"></i>
+                </button>
+                <div><b>{{ p.heure }} · {{ p.exercice_nom }}</b><small v-if="p.note">{{ p.note }}</small></div>
+                <div class="cal-actions">
+                  <button class="icon-btn" @click="demarrerPlanif(p)" title="Commencer maintenant"><i class="fa-solid fa-play"></i></button>
+                  <button class="icon-btn" @click="supprimerPlanif(p)" title="Retirer"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </div>
+            </div>
+
+            <p class="cal-empty" v-if="!detailJour.seances.length && !detailJour.planifs.length">
+              Rien de prévu ce jour-là. Planifiez une séance ci-dessous.
+            </p>
+
+            <div class="cal-form">
+              <div class="cal-block-title">Planifier une séance</div>
+              <select class="form-select" v-model="nouvellePlanif.exercice_id">
+                <option v-for="exo in catalogue" :key="exo.id" :value="exo.id">{{ exo.nom }}</option>
+              </select>
+              <div class="cal-form-row">
+                <input class="form-input" type="time" v-model="nouvellePlanif.heure">
+                <input class="form-input" type="text" v-model="nouvellePlanif.note" placeholder="Note (facultatif)" maxlength="80">
+              </div>
+              <button class="btn btn-primary" style="width:100%" @click="ajouterPlanif">
+                <i class="fa-solid fa-calendar-plus"></i> Ajouter au {{ jourSelectionneCourt }}
+              </button>
+              <div class="auth-msg" v-if="planifMessage"><i class="fa-solid fa-circle-exclamation"></i> {{ planifMessage }}</div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- ======================================================== -->
@@ -839,6 +954,44 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="isNewExoModalOpen = false">Annuler</button>
           <button class="btn btn-primary" @click="handleCreerOuModifierExercice">Enregistrer les paramètres</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modale Vidéos d'un exercice (Administrateur uniquement) -->
+    <div class="modal-backdrop" v-if="isVideoModalOpen && currentUser.role === 'administrateur'">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 style="font-size: 1.25rem; font-weight: 700;"><i class="fa-solid fa-film" style="color: var(--accent-cyan);"></i> Vidéos : {{ videoExo?.nom }}</h3>
+          <button class="icon-btn" @click="isVideoModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="vid-list" v-if="videoExo && videosDe(videoExo).length">
+            <div class="vid-item" v-for="v in videosDe(videoExo)" :key="v.id">
+              <video :src="v.url + '#t=0.5'" muted preload="metadata"></video>
+              <div class="vid-meta"><b>{{ v.titre || 'Sans titre' }}</b>
+                <small>Ajoutée par {{ v.ajoute_par }} · {{ (v.taille_octets / 1048576).toFixed(1) }} Mo</small></div>
+              <button class="icon-btn" @click="supprimerVideo(v)" title="Supprimer"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+          <p class="cal-empty" v-else>Aucune vidéo ajoutée pour cet exercice. La vidéo de test par défaut est utilisée.</p>
+
+          <div class="form-group">
+            <label class="form-label">Titre (facultatif)</label>
+            <input class="form-input" v-model="videoForm.titre" placeholder="Ex. : Squat, vue de profil" maxlength="100">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fichier vidéo (.mp4, .webm, .mov, 100 Mo max)</label>
+            <input class="form-input" type="file" accept="video/mp4,video/webm,video/quicktime" @change="onFichierVideo" ref="champVideo">
+          </div>
+          <div class="auth-msg" v-if="videoMessage"><i class="fa-solid fa-circle-exclamation"></i> {{ videoMessage }}</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="isVideoModalOpen = false">Fermer</button>
+          <button class="btn btn-primary" @click="envoyerVideo" :disabled="videoEnvoi">
+            <i class="fa-solid" :class="videoEnvoi ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-up'"></i>
+            {{ videoEnvoi ? 'Envoi en cours…' : 'Ajouter la vidéo' }}
+          </button>
         </div>
       </div>
     </div>

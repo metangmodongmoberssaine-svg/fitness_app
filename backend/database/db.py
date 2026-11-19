@@ -262,6 +262,34 @@ def init_db():
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
 
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS videos_exercices (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            exercice_id INT NOT NULL,
+            titre VARCHAR(150) NOT NULL DEFAULT '',
+            chemin VARCHAR(255) NOT NULL,
+            taille_octets BIGINT NOT NULL DEFAULT 0,
+            uploaded_by INT NULL,
+            date_ajout VARCHAR(50) NOT NULL,
+            CONSTRAINT fk_video_exercice FOREIGN KEY (exercice_id) REFERENCES exercices(id) ON DELETE CASCADE,
+            CONSTRAINT fk_video_user FOREIGN KEY (uploaded_by) REFERENCES utilisateurs(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS planifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            sportif_id INT NOT NULL,
+            exercice_id INT NOT NULL,
+            date_prevue VARCHAR(10) NOT NULL,
+            heure VARCHAR(5) NOT NULL DEFAULT '18:00',
+            note VARCHAR(255) DEFAULT '',
+            statut VARCHAR(20) NOT NULL DEFAULT 'prevue',
+            CONSTRAINT fk_plan_sportif FOREIGN KEY (sportif_id) REFERENCES utilisateurs(id) ON DELETE CASCADE,
+            CONSTRAINT fk_plan_exercice FOREIGN KEY (exercice_id) REFERENCES exercices(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """)
+
     else:
         # Tables SQLite
         cur.execute("""
@@ -361,6 +389,33 @@ def init_db():
             canal TEXT NOT NULL DEFAULT 'push',
             statut TEXT NOT NULL DEFAULT 'non_lu',
             FOREIGN KEY (sportif_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
+        );
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS videos_exercices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            exercice_id INTEGER NOT NULL,
+            titre TEXT NOT NULL DEFAULT '',
+            chemin TEXT NOT NULL,
+            taille_octets INTEGER NOT NULL DEFAULT 0,
+            uploaded_by INTEGER,
+            date_ajout TEXT NOT NULL,
+            FOREIGN KEY (exercice_id) REFERENCES exercices(id) ON DELETE CASCADE,
+            FOREIGN KEY (uploaded_by) REFERENCES utilisateurs(id) ON DELETE SET NULL
+        );
+        """)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS planifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sportif_id INTEGER NOT NULL,
+            exercice_id INTEGER NOT NULL,
+            date_prevue TEXT NOT NULL,
+            heure TEXT NOT NULL DEFAULT '18:00',
+            note TEXT DEFAULT '',
+            statut TEXT NOT NULL DEFAULT 'prevue',
+            FOREIGN KEY (sportif_id) REFERENCES utilisateurs(id) ON DELETE CASCADE,
+            FOREIGN KEY (exercice_id) REFERENCES exercices(id) ON DELETE CASCADE
         );
         """)
 

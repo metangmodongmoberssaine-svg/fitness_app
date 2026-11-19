@@ -665,7 +665,7 @@ const app = createApp({
         };
       }
 
-      loadHistorique();
+      loadHistorique(); loadPlanning();
       loadObjectifs();
     };
 
@@ -682,7 +682,7 @@ const app = createApp({
         niveau: "Intermédiaire"
       };
       loadObjectifs();
-      loadHistorique();
+      loadHistorique(); loadPlanning();
       loadNotifications();
       if (role === "administrateur") loadAdminData();
     };
@@ -730,7 +730,7 @@ const app = createApp({
         authForm.mot_de_passe = "";
         if (veutSEntrainer && selectedExercice.value) activeView.value = "workout";
         loadObjectifs();
-        loadHistorique();
+        loadHistorique(); loadPlanning();
         loadNotifications();
         if (data.user.role === "administrateur") loadAdminData();
       } catch (e) {
@@ -749,6 +749,7 @@ const app = createApp({
         taille: 175,
         niveau: "Débutant"
       };
+      planifications.value = [];
       activeView.value = "catalogue";
     };
 
@@ -849,11 +850,224 @@ const app = createApp({
       return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
     };
 
+
+    // ======================================================================
+    // VIDÉOS D'EXERCICES (aperçu catalogue, démonstration, gestion admin)
+    // ======================================================================
+    const ORIGIN = API_BASE.replace(/\/api$/, "");
+    const mediaUrl = (p) => (!p ? "" : /^https?:/.test(p) ? p : ORIGIN + encodeURI(p));
+    const authHeaders = () => ({
+      Authorization: `Bearer token-${currentUser.value.id}-${currentUser.value.role}`
+    });
+
+    const videos = ref([]);
+    const isVideoModalOpen = ref(false);
+    const videoExo = ref(null);
+    const videoForm = reactive({ titre: "", fichier: null });
+    const videoMessage = ref("");
+    const videoEnvoi = ref(false);
+    const champVideo = ref(null);
+
+    const loadVideos = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/videos`);
+        const data = await res.json();
+        videos.value = data.map(v => ({ ...v, url: ORIGIN + v.url }));
+      } catch (e) {
+        console.error("Erreur chargement vidéos:", e);
+      }
+    };
+
+    const videosDe = (exo) => videos.value.filter(v => v.exercice_id === exo.id);
+    // Vidéo ajoutée par l'admin en priorité, sinon la vidéo de test de l'exercice
+    const videoPour = (exo) => {
+      if (!exo) return "";
+      const v = videosDe(exo)[0];
+      return v ? v.url : mediaUrl(exo.video_sample);
+    };
+
+    const playPreview = (e) => {
+      const v = e.currentTarget.querySelector("video");
+      if (v) { v.currentTime = 0.8; v.play().catch(() => {}); }
+    };
+    const stopPreview = (e) => {
+      const v = e.currentTarget.querySelector("video");
+      if (v) v.pause();
+    };
+
+    const ouvrirVideosAdmin = (exo) => {
+      videoExo.value = exo;
+      videoForm.titre = "";
+      videoForm.fichier = null;
+      videoMessage.value = "";
+      isVideoModalOpen.value = true;
+    };
+    const onFichierVideo = (e) => { videoForm.fichier = e.target.files[0] || null; };
+
+    const envoyerVideo = async () => {
+      videoMessage.value = "";
+      if (!videoForm.fichier) { videoMessage.value = "Choisissez d'abord un fichier vidéo."; return; }
+      if (videoForm.fichier.size > 100 * 1024 * 1024) { videoMessage.value = "Vidéo trop lourde (100 Mo maximum)."; return; }
+      const fd = new FormData();
+      fd.append("exercice_id", videoExo.value.id);
+      fd.append("titre", videoForm.titre);
+      fd.append("fichier", videoForm.fichier);
+      videoEnvoi.value = true;
+      try {
+        const res = await fetch(`${API_BASE}/videos`, { method: "POST", headers: authHeaders(), body: fd });
+        const data = await res.json();
+        if (!res.ok) { videoMessage.value = data.detail || "Échec de l'envoi."; return; }
+        videoForm.titre = ""; videoForm.fichier = null;
+        if (champVideo.value) champVideo.value.value = "";
+        await loadVideos();
+      } catch (e) {
+        videoMessage.value = "Impossible de joindre le serveur.";
+      } finally {
+        videoEnvoi.value = false;
+      }
+    };
+
+    const supprimerVideo = async (v) => {
+      if (!confirm("Supprimer cette vidéo définitivement ?")) return;
+      try {
+        const res = await fetch(`${API_BASE}/videos/${v.id}`, { method: "DELETE", headers: authHeaders() });
+        if (!res.ok) { videoMessage.value = (await res.json()).detail || "Suppression impossible."; return; }
+        await loadVideos();
+      } catch (e) { videoMessage.value = "Impossible de joindre le serveur."; }
+    };
+
+    // ======================================================================
+    // CALENDRIER D'ENTRAÎNEMENT
+    // ======================================================================
+    const NOMS_MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+    const joursSemaine = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+    const cleDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    const maintenant = new Date();
+    const calMois = reactive({ annee: maintenant.getFullYear(), mois: maintenant.getMonth() });
+    const jourSelectionne = ref(cleDate(maintenant));
+    const planifications = ref([]);
+    const nouvellePlanif = reactive({ exercice_id: 1, heure: "18:00", note: "" });
+    const planifMessage = ref("");
+
+    const nomMois = computed(() => NOMS_MOIS[calMois.mois]);
+
+    const loadPlanning = async () => {
+      if (!currentUser.value || currentUser.value.role === "visiteur") { planifications.value = []; return; }
+      try {
+        const res = await fetch(`${API_BASE}/planning`, { headers: authHeaders() });
+        planifications.value = res.ok ? await res.json() : [];
+      } catch (e) { console.error("Erreur chargement planning:", e); }
+    };
+
+    const seancesParJour = computed(() => {
+      const m = {};
+      (historiqueSeances.value || []).forEach(s => {
+        const k = String(s.date_debut).slice(0, 10);
+        (m[k] = m[k] || []).push(s);
+      });
+      return m;
+    });
+    const planifsParJour = computed(() => {
+      const m = {};
+      planifications.value.forEach(p => { (m[p.date_prevue] = m[p.date_prevue] || []).push(p); });
+      return m;
+    });
+
+    const joursCalendrier = computed(() => {
+      const premier = new Date(calMois.annee, calMois.mois, 1);
+      const decalage = (premier.getDay() + 6) % 7;                 // semaine commençant le lundi
+      const nbJours = new Date(calMois.annee, calMois.mois + 1, 0).getDate();
+      const auj = cleDate(new Date());
+      const cases = Array(decalage).fill(null);
+      for (let jour = 1; jour <= nbJours; jour++) {
+        const cle = cleDate(new Date(calMois.annee, calMois.mois, jour));
+        cases.push({
+          jour, cle, aujourdhui: cle === auj,
+          seances: (seancesParJour.value[cle] || []).length,
+          prevues: (planifsParJour.value[cle] || []).filter(p => p.statut !== "faite").length
+        });
+      }
+      return cases;
+    });
+
+    const statsMois = computed(() => {
+      const prefixe = `${calMois.annee}-${String(calMois.mois + 1).padStart(2, "0")}`;
+      let seances = 0, reps = 0; const jours = new Set();
+      (historiqueSeances.value || []).forEach(s => {
+        if (String(s.date_debut).startsWith(prefixe)) {
+          seances++; reps += s.total_repetitions || 0; jours.add(String(s.date_debut).slice(0, 10));
+        }
+      });
+      const auj = cleDate(new Date());
+      const prevues = planifications.value.filter(p => p.statut !== "faite" && p.date_prevue >= auj).length;
+      return { seances, reps, jours: jours.size, prevues };
+    });
+
+    const detailJour = computed(() => ({
+      seances: seancesParJour.value[jourSelectionne.value] || [],
+      planifs: planifsParJour.value[jourSelectionne.value] || []
+    }));
+    const libelleJour = computed(() => {
+      const [a, m, d] = jourSelectionne.value.split("-").map(Number);
+      const t = new Date(a, m - 1, d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      return t.charAt(0).toUpperCase() + t.slice(1);
+    });
+    const jourSelectionneCourt = computed(() => {
+      const [a, m, d] = jourSelectionne.value.split("-").map(Number);
+      return new Date(a, m - 1, d).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+    });
+
+    const moisPrecedent = () => { if (calMois.mois === 0) { calMois.mois = 11; calMois.annee--; } else calMois.mois--; };
+    const moisSuivant = () => { if (calMois.mois === 11) { calMois.mois = 0; calMois.annee++; } else calMois.mois++; };
+    const aujourdhui = () => {
+      const n = new Date();
+      calMois.annee = n.getFullYear(); calMois.mois = n.getMonth(); jourSelectionne.value = cleDate(n);
+    };
+
+    const ajouterPlanif = async () => {
+      planifMessage.value = "";
+      try {
+        const res = await fetch(`${API_BASE}/planning`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({
+            exercice_id: nouvellePlanif.exercice_id, date_prevue: jourSelectionne.value,
+            heure: nouvellePlanif.heure || "18:00", note: nouvellePlanif.note
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) { planifMessage.value = data.detail || "Ajout impossible."; return; }
+        nouvellePlanif.note = "";
+        await loadPlanning();
+      } catch (e) { planifMessage.value = "Impossible de joindre le serveur."; }
+    };
+
+    const basculerPlanif = async (p) => {
+      const statut = p.statut === "faite" ? "prevue" : "faite";
+      await fetch(`${API_BASE}/planning/${p.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ statut })
+      });
+      await loadPlanning();
+    };
+
+    const supprimerPlanif = async (p) => {
+      await fetch(`${API_BASE}/planning/${p.id}`, { method: "DELETE", headers: authHeaders() });
+      await loadPlanning();
+    };
+
+    const demarrerPlanif = (p) => {
+      const exo = catalogue.value.find(e => e.id === p.exercice_id);
+      if (exo) choisirExercice(exo);
+    };
+
     onMounted(() => {
+      loadVideos();
       loadCatalogue();
       loadSamples();
       loadObjectifs();
-      loadHistorique();
+      loadHistorique(); loadPlanning();
       loadNotifications();
     });
 
@@ -862,6 +1076,11 @@ const app = createApp({
     });
 
     return {
+      videos, isVideoModalOpen, videoExo, videoForm, videoMessage, videoEnvoi, champVideo,
+      videosDe, videoPour, playPreview, stopPreview, ouvrirVideosAdmin, onFichierVideo, envoyerVideo, supprimerVideo,
+      calMois, nomMois, joursSemaine, joursCalendrier, jourSelectionne, statsMois, detailJour, libelleJour,
+      jourSelectionneCourt, planifications, nouvellePlanif, planifMessage,
+      moisPrecedent, moisSuivant, aujourdhui, ajouterPlanif, basculerPlanif, supprimerPlanif, demarrerPlanif,
       activeView,
       currentUser,
       catalogue,

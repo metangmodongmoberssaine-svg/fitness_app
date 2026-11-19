@@ -24,6 +24,8 @@ from api.objectifs import router as objectifs_router
 from api.notifications import router as notifications_router
 from api.admin import router as admin_router
 from api.vision import router as vision_router
+from api.videos import router as videos_router, UPLOAD_DIR
+from api.planning import router as planning_router
 
 app = FastAPI(
     title="Real-Time AI Fitness Counter API",
@@ -54,6 +56,8 @@ app.include_router(objectifs_router)
 app.include_router(notifications_router)
 app.include_router(admin_router)
 app.include_router(vision_router)
+app.include_router(videos_router)
+app.include_router(planning_router)
 
 # Health check
 @app.get("/api/health")
@@ -74,6 +78,10 @@ def health_check():
 samples_path = os.path.join(os.path.dirname(__file__), "samples")
 if os.path.exists(samples_path):
     app.mount("/samples", StaticFiles(directory=samples_path), name="samples")
+
+# Vidéos ajoutées par l'administrateur
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads/videos", StaticFiles(directory=UPLOAD_DIR), name="uploads_videos")
 
 # Montage de l'application frontend si elle est compilée / statique (en dernier pour ne pas intercepter /api)
 frontend_dist_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
